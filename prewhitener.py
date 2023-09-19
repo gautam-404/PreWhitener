@@ -96,23 +96,20 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
         double_digit = "0" if n<9 else ""
         plt.savefig(f'pw/{name}/pg_{double_digit}{n+1}', bbox_inches='tight')
 
-        ## Append the peaks to the list
-        # peaks = np.append(peaks, peaks_i)
+        ## Add the peaks to the list
         peaks += peaks_i
-
-
         ## Fitting the sinusoids and subtracting them from the original signal
         for freq, amp in zip(freqs_i[peaks_i], amps_i[peaks_i]):
             omega = 2 * np.pi * freq
-            p0 = [amp, omega, 0, 0]
+            p0 = [amp, omega, 0.5, 0.5]
             params, pcov = curve_fit(sinusoidal_model, time, flux_i, p0=p0)
-            # ## Negative amp corrections. Flip sign, add pi to phase
-            # if params[0] < 0:
-            #     params[0] *= -1.
-            #     params[2] += np.pi
+            ## Negative amp corrections. Flip sign, add pi to phase
+            if params[0] < 0:
+                params[0] *= -1.
+                params[2] += np.pi
             
             peak_freqs.append(params[1]/(2*np.pi))
-            peak_amps.append(params[0])
+            peak_amps.append(params[0]*1000)
             flux_i -= sinusoidal_model(time, *params)
 
         # Periodogram after pre-whitening
@@ -145,10 +142,10 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
         freq_amp = freq_amp.drop(index=harmonics_idx)
     
     # Final periodogram after pre-whitening
-    freqs, amps = amp_spectrum(t=time, y=flux/np.median(flux), fmin=0, fmax=90, nyq_mult=1, oversample_factor=5)
+    freqs, amps = amp_spectrum(t=time, y=flux, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
     amps *= 1000 # convert to ppt
     plt.figure()
-    plt.scatter(peak_freqs, peak_amps, s=10, color='red')
+    plt.scatter(freq_amp.freq.values, freq_amp.amp.values, s=10, color='red')
     plt.plot(freqs, amps)
     plt.title("Lomb-Scargle Periodogram with peaks")
     plt.xlabel("Frequency (1/day)")
@@ -167,9 +164,6 @@ if __name__ == "__main__":
     # star = 'HD47129'
     # star = 'V647Tau'
 
-    # lk_search = lk.search_lightcurve(star, mission="TESS", cadence=120)
-    # lc = lk_search[0].download().remove_nans().remove_outliers()
-
     lc_collection = lk.search_lightcurve(star, mission="TESS", cadence=120, author="SPOC").download_all()
     lc = lc_collection[0].normalize() # defaults to pdcsap_flux now.
     for l in lc_collection[1:]:
@@ -177,8 +171,7 @@ if __name__ == "__main__":
     lc = lc.remove_nans().remove_outliers()
 
     # Extract time and flux from the light curve
-    time = lc.time.value
-    flux = lc.flux.value
+    time, flux = lc.time.value, lc.flux.value
 
     # Pre-whiten the light curve
     peaks, peak_freqs, peak_amps = prewhitener(time, flux, f_sigma=5, remove_harmonics=True, max_iterations=20, name=star)
