@@ -32,7 +32,7 @@ def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
 def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
-def prewhitener(time, flux, f_sigma=3, max_iterations=5, fmin=None, fmax=90, nyq_mult=1, oversample_factor=5, name='star'):
+def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, fmin=None, fmax=90, nyq_mult=1, oversample_factor=5, name='star'):
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
     else:
@@ -86,7 +86,7 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5, fmin=None, fmax=90, nyq
             flux_i -= sinusoidal_model(time, *params)
             freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
 
-        # Plot the periodogram and the folded light curve
+        # Plot the periodogram
         ax.cla()
         ax.plot(freqs_i, amps_i)
         ax.set_title(f"Pre-whitening iteration {n+1}")
@@ -101,16 +101,17 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5, fmin=None, fmax=90, nyq
     ## sort frequencies in ascending order
     peak_amps = sorted(peak_amps, reverse=True)
 
-    # # # Harmonic ratio checking
-    tolerance = 0.01 
-    harmonics_idx = []
-    for i in range(len(peak_freqs)):
-        for j in range(i+1, len(peak_freqs)):
-            ratio = peak_freqs[j]/peak_freqs[i]
-            if np.abs(ratio - round(ratio)) < tolerance:
-                harmonics_idx.append(j)
-    peak_freqs = np.delete(peak_freqs, harmonics_idx)
-    peak_amps = np.delete(peak_amps, harmonics_idx)
+    if remove_harmonics:
+        # # # Harmonic ratio checking
+        tolerance = 0.01 
+        harmonics_idx = []
+        for i in range(len(peak_freqs)):
+            for j in range(i+1, len(peak_freqs)):
+                ratio = peak_freqs[j]/peak_freqs[i]
+                if np.abs(ratio - round(ratio)) < tolerance:
+                    harmonics_idx.append(j)
+        peak_freqs = np.delete(peak_freqs, harmonics_idx)
+        peak_amps = np.delete(peak_amps, harmonics_idx)
 
     print('Done!')
     return peaks, peak_freqs, peak_amps, freqs, amps
@@ -128,7 +129,7 @@ if __name__ == "__main__":
     flux = lc.flux.value
 
     # Pre-whiten the light curve
-    peaks, peak_freqs, peak_amps, freqs, amps = prewhitener(time, flux, f_sigma=5, max_iterations=10, name=star)
+    peaks, peak_freqs, peak_amps, freqs, amps = prewhitener(time, flux, f_sigma=5, remove_harmonics=True, max_iterations=10, name=star)
 
     df = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps}).sort_values(by='freq')
     df.to_csv(f'pw/{star}_frequencies.csv', index=False)
