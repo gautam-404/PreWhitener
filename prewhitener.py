@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from astropy.timeseries import LombScargle
 from scipy.optimize import curve_fit
-from lmfit import Model
 from scipy.signal import find_peaks, peak_widths, peak_prominences
 
 
@@ -45,7 +44,9 @@ def is_harmonic(f1, f2, tolerance=0.01):
 def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
-def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, fmin=None, fmax=90, nyq_mult=1, oversample_factor=5, name='star'):
+def prewhitener(time, flux, f_sigma=3, max_iterations=5,
+                remove_harmonics=True, harmonic_tolerance=0.005,  
+                fmin=None, fmax=90, nyq_mult=1, oversample_factor=5, name='star'):
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
     else:
@@ -133,7 +134,7 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
     freq_amp = freq_amp.sort_values(by='freq', ascending=False)
     if remove_harmonics:
         # # # Harmonic ratio checking
-        tolerance = 0.001 
+        tolerance = harmonic_tolerance
         harmonics_idx = []
         for i in range(len(freq_amp)):
             for j in range(i+1, len(freq_amp)):
@@ -174,5 +175,7 @@ if __name__ == "__main__":
     time, flux = lc.time.value, lc.flux.value
 
     # Pre-whiten the light curve
-    peaks, peak_freqs, peak_amps = prewhitener(time, flux, f_sigma=5, remove_harmonics=True, max_iterations=20, name=star)
+    peaks, peak_freqs, peak_amps = prewhitener(time, flux, f_sigma=5, 
+                                               remove_harmonics=True, harmonic_tolerance=0.005,
+                                               max_iterations=20, name=star)
 
