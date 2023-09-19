@@ -114,6 +114,7 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
         ax2.set_xlim(ax1.get_xlim())
         ax2.set_ylim(ax1.get_ylim())
         plt.savefig(f'pw/{name}/pg_{n+1}', bbox_inches='tight')
+    plt.close()
 
     ## Freqs of sorted peaks
     peak_freqs = peak_freqs[np.argsort(peak_amps)[::-1]]
@@ -149,7 +150,7 @@ if __name__ == "__main__":
     flux = lc.flux.value
 
     # Pre-whiten the light curve
-    peaks, peak_freqs, peak_amps, freqs, amps = prewhitener(time, flux, f_sigma=5, remove_harmonics=True, max_iterations=20, name=star)
+    peaks, peak_freqs, peak_amps = prewhitener(time, flux, f_sigma=5, remove_harmonics=True, max_iterations=20, name=star)
 
     df = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps}).sort_values(by='freq')
     df.to_csv(f'pw/{star}_frequencies.csv', index=False)
