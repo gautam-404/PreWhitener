@@ -53,13 +53,16 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
 
         # Find peaks in the periodogram
         peaks_tmp = find_peaks(amps_i)[0]
-        peaks_widths_i = peak_widths(amps_i, peaks=peaks_tmp, rel_height=0.7)[0]
-        width = np.median(peaks_widths_i)
-        distance = width/(np.median(np.diff(freqs_i))-10*np.std(np.diff(freqs_i)))
-        # prominence = np.median(sp.signal.peak_prominences(amps_i, peaks=peaks_tmp, wlen=(width+3*np.std(width)))[0])
-        prominence = np.median(peak_prominences(amps_i, peaks=peaks_tmp)[0])
+        prominence_data = peak_prominences(amps_i, peaks=peaks_tmp)
+        prominence = np.median(prominence_data[0])
+        peaks_widths_i = peak_widths(amps_i, peaks=peaks_tmp, rel_height=0.5, prominence_data=prominence_data)[0]
+        width = np.median(peaks_widths_i)  ## median fwhm 
+        distance = width/(np.median(np.diff(freqs_i)))
 
-        peaks_i = find_peaks(amps_i, height=np.median(amps_i)+f_sigma*np.std(amps_i), width=width, prominence=prominence, distance=distance)[0]
+        peaks_i = find_peaks(amps_i, height=np.median(amps_i)+f_sigma*np.std(amps_i), 
+                             width=width, 
+                             prominence=prominence,
+                             distance=distance)[0]
 
         ## If no peaks are found, break the loop
         if len(peaks_i) == 0:
