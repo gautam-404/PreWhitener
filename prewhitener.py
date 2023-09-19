@@ -25,7 +25,6 @@ def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
     sc = model.power(freq, method="fast", normalization="psd")
 
     amp = np.sqrt(4./len(t)) * np.sqrt(sc)
-
     return freq, amp
 
 # Define a sinusoidal function to fit the peaks
@@ -39,37 +38,50 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
         shutil.rmtree(f'pw/{name}')
         os.makedirs(f'pw/{name}')
 
+    ## Normalize the flux
+    flux = flux/np.median(flux)
     flux_i = copy.deepcopy(flux)
     freqs, amps = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
-    freqs_i = copy.deepcopy(freqs)
-    amps_i = copy.deepcopy(amps)
-    peaks = np.array([], dtype=int)
-
-    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+    
+    fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+    ax1, ax2 = ax[0], ax[1]
     peak_freqs = np.array([])
     peak_amps = np.array([])
+    peaks = np.array([], dtype=int)
     for n in range(max_iterations):
+        ## Find all peaks to calculate the median prominence and width
         freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
-
-        # Find peaks in the periodogram
         peaks_tmp = find_peaks(amps_i)[0]
+
         prominence_data = peak_prominences(amps_i, peaks=peaks_tmp)
         prominence = np.median(prominence_data[0])
         peaks_widths_i = peak_widths(amps_i, peaks=peaks_tmp, rel_height=0.5, prominence_data=prominence_data)[0]
         width = np.median(peaks_widths_i)  ## median fwhm 
         distance = width/(np.median(np.diff(freqs_i)))
 
+        ## Find all peaks that fit the above criteria
         peaks_i = find_peaks(amps_i, height=np.median(amps_i)+f_sigma*np.std(amps_i), 
                              width=width, 
                              prominence=prominence,
                              distance=distance)[0]
-
+        
         ## If no peaks are found, break the loop
         if len(peaks_i) == 0:
             break
+            
+        # Periodogram before pre-whitening
+        ax1.cla()
+        ax1.plot(freqs_i, amps_i)
+        ax1.scatter(freqs_i[peaks_i], amps_i[peaks_i], c='r', s=10, label='Frequecies to be extracted')
+        ax1.set_title("Before")
+        ax1.set_xlabel("Frequency (1/day)")
+        ax1.set_ylabel("Normalised Amplitude")
+        ax1.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
 
+        ## Append the peaks to the list
         peaks = np.append(peaks, peaks_i)
 
+        ## Fitting the sinusoids and subtracting them from the original signal
         peak_freqs_i = []
         peak_amps_i = []
         for i, freq in enumerate(freqs_i[peaks_i]):
@@ -87,21 +99,24 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
             
             # # Subtract the fitted sinusoid from the original signal
             flux_i -= sinusoidal_model(time, *params)
-            freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
-
-        # Plot the periodogram
-        ax.cla()
-        ax.plot(freqs_i, amps_i)
-        ax.set_title(f"Pre-whitening iteration {n+1}")
-        ax.set_xlabel("Frequency (1/day)")
-        ax.set_ylabel("Power")
-        plt.savefig(f'pw/{name}/pg_{n+1}')
         peak_freqs = np.append(peak_freqs, peak_freqs_i)
         peak_amps = np.append(peak_amps, peak_amps_i)
 
-    ## freqs of these sorted peaks
+        # Periodogram after pre-whitening
+        ax2.cla()
+        freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
+        ax2.plot(freqs_i, amps_i)
+        ax2.set_title("After")
+        ax2.set_xlabel("Frequency (1/day)")
+        ax2.set_ylabel("Normalised Amplitude")
+        ax2.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+        ax2.set_xlim(ax1.get_xlim())
+        ax2.set_ylim(ax1.get_ylim())
+        plt.savefig(f'pw/{name}/pg_{n+1}', bbox_inches='tight')
+
+    ## Freqs of sorted peaks
     peak_freqs = peak_freqs[np.argsort(peak_amps)[::-1]]
-    ## sort frequencies in ascending order
+    ## Amps of sorted peaks
     peak_amps = sorted(peak_amps, reverse=True)
 
     if remove_harmonics:
@@ -120,7 +135,8 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
     return peaks, peak_freqs, peak_amps, freqs, amps
 
 if __name__ == "__main__":
-    star = 'TIC171591531'
+    # star = 'TIC171591531'
+    star = 'TIC17372709'
     # star = 'HD20203'
     # star = 'HD47129'
     # star = 'V647Tau'
@@ -132,7 +148,7 @@ if __name__ == "__main__":
     flux = lc.flux.value
 
     # Pre-whiten the light curve
-    peaks, peak_freqs, peak_amps, freqs, amps = prewhitener(time, flux, f_sigma=5, remove_harmonics=True, max_iterations=10, name=star)
+    peaks, peak_freqs, peak_amps, freqs, amps = prewhitener(time, flux, f_sigma=5, remove_harmonics=True, max_iterations=20, name=star)
 
     df = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps}).sort_values(by='freq')
     df.to_csv(f'pw/{star}_frequencies.csv', index=False)
