@@ -41,16 +41,17 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
     ## Normalize the flux
     flux = flux/np.median(flux)
     flux_i = copy.deepcopy(flux)
-    freqs, amps = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
-    
+
     fig, ax = plt.subplots(1, 2, figsize=(12, 4))
     ax1, ax2 = ax[0], ax[1]
     peak_freqs = np.array([])
     peak_amps = np.array([])
     peaks = np.array([], dtype=int)
+
+    ## Initial amplitude spectrum
+    freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
     for n in range(max_iterations):
         ## Find all peaks to calculate the median prominence and width
-        freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
         peaks_tmp = find_peaks(amps_i)[0]
 
         prominence_data = peak_prominences(amps_i, peaks=peaks_tmp)
@@ -132,7 +133,7 @@ def prewhitener(time, flux, f_sigma=3, remove_harmonics=True, max_iterations=5, 
         peak_amps = np.delete(peak_amps, harmonics_idx)
 
     print('Done!')
-    return peaks, peak_freqs, peak_amps, freqs, amps
+    return peaks, peak_freqs, peak_amps
 
 if __name__ == "__main__":
     # star = 'TIC171591531'
