@@ -47,8 +47,8 @@ def is_harmonic(f1, f2, tolerance):
 def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
-def prewhitener(time, flux, f_sigma=3, max_iterations=50, snr_threshold=5,
-                remove_harmonics=True, harmonic_tolerance=0.001, nearby_peaks_tolerance=0.1,
+def prewhitener(time, flux, max_iterations=100, snr_threshold=5, nearby_peaks_tolerance=0.1,
+                remove_harmonics=True, harmonic_tolerance=0.001,  
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
@@ -60,8 +60,6 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=50, snr_threshold=5,
     flux = flux/np.median(flux)
     flux_i = copy.deepcopy(flux)
 
-    fig, ax = plt.subplots(1, 2, figsize=(12, 4))
-    ax1, ax2 = ax[0], ax[1]
     peak_freqs = []
     peak_amps = []
     peaks = []
@@ -70,70 +68,42 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=50, snr_threshold=5,
     freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
     amps_i *= 1000 # convert to ppt
     for n in range(max_iterations):
-        ## Find all peaks to calculate the median prominence and width
-        peaks_tmp = find_peaks(amps_i)[0]
-
-        prominence_data = peak_prominences(amps_i, peaks=peaks_tmp)
-        prominence = np.median(prominence_data[0])
-        peaks_widths_i = peak_widths(amps_i, peaks=peaks_tmp, rel_height=0.5, prominence_data=prominence_data)[0]
-        width = np.median(peaks_widths_i)  ## median fwhm 
-        # distance = width/(np.median(np.diff(freqs_i)))
-        distance = len(amps_i)/width
-
-        ## Find all peaks that fit the above criteria
-        peaks_i = find_peaks(amps_i, height=np.median(amps_i)+f_sigma*np.std(amps_i), 
-                             width=width, 
-                             prominence=prominence,
-                             distance=distance)[0].tolist()
+        ## Find all peaks
+        peaks_i = find_peaks(amps_i)[0]
         
         ## If no peaks are found, break the loop
         if len(peaks_i) == 0:
             print('No more peaks found')
             break
-            
-        # Periodogram before pre-whitening
-        ax1.cla()
-        ax1.plot(freqs_i, amps_i)
-        ax1.scatter(freqs_i[peaks_i], amps_i[peaks_i], c='r', s=10, label='Frequecies to be extracted')
-        ax1.set_title("Before")
-        ax1.set_xlabel("Frequency (1/day)")
-        ax1.set_ylabel("Amplitude (ppt)")
 
-        ## Add the peaks to the list
-        peaks += peaks_i
-        ## Fitting the sinusoids and subtracting them from the original signal
-        for freq, amp in zip(freqs_i[peaks_i], amps_i[peaks_i]):
-            omega = 2 * np.pi * freq
-            p0 = [amp, omega, 0.5, 0.5]
-            params, pcov = curve_fit(sinusoidal_model, time, flux_i, p0=p0)
-            ## Negative amp corrections. Flip sign, add pi to phase
-            if params[0] < 0:
-                params[0] *= -1.
-                params[2] += np.pi
-            
-            peak_freqs.append(params[1]/(2*np.pi))
-            peak_amps.append(params[0]*1000)
-            flux_i -= sinusoidal_model(time, *params)
+        ## Fit and remove the highest peak
+        amp = np.max(amps_i)
+        freq = freqs_i[np.argmax(amps_i)]
+        omega = 2 * np.pi * freq
+        p0 = [amp, omega, 0.5, 0.5]
+        params, pcov = curve_fit(sinusoidal_model, time, flux_i, p0=p0)
+        ## Negative amp corrections. Flip sign, add pi to phase
+        if params[0] < 0:
+            params[0] *= -1.
+            params[2] += np.pi
+        peak_freqs.append(params[1]/(2*np.pi))
+        # peak_amps.append(params[0]*1000)
+        peak_amps.append(amp)
+        flux_i -= sinusoidal_model(time, *params)
 
-        #### SNR stop check ####
+
+        ### New amplitude spectrum ###
+        freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
+        amps_i *= 1000 # convert to ppt
+
+        ### SNR stopping condition ###
         noise = median_filter(amps_i, size=int(len(amps_i)*(freqs_i[1]-freqs_i[0])/(freqs_i[-1]-freqs_i[0])))
         snr = np.max(amps_i) / np.median(noise)
         if snr < snr_threshold:
             print('SNR threshold reached')
             break
 
-        # Periodogram after pre-whitening
-        ax2.cla()
-        ax2.plot(freqs_i, amps_i)
-        ax2.set_title("After")
-        ax2.set_xlabel("Frequency (1/day)")
-        ax2.set_ylabel("Amplitude (ppt)")
-        ax2.set_xlim(ax1.get_xlim())
-        ax2.set_ylim(ax1.get_ylim())
-        double_digit = "0" if n<9 else ""
-        plt.savefig(f'pw/{name}/pg_{double_digit}{n+1}', bbox_inches='tight')
-    plt.close()
-
+    ## Creating a dataframe with the peaks
     freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps})
 
     ## Sorting the peaks by amplitude
@@ -147,9 +117,8 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=50, snr_threshold=5,
                     harmonics_idx.append(j)
         freq_amp = freq_amp.drop(index=harmonics_idx)
 
-    ## Remove overlapping or very nearby peaks, keep the highest amplitude one
+    ## Remove overlapping or very nearby peaks, keeping the highest amplitude one
     freq_amp = freq_amp.sort_values(by=['freq', 'amp'], ascending=False)
-
     freq_amp = freq_amp.reset_index(drop=True)
     to_drop = []
     for i in range(len(freq_amp)-1):
@@ -164,21 +133,21 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=50, snr_threshold=5,
     freqs, amps = amp_spectrum(t=time, y=flux, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
     amps *= 1000 # convert to ppt
     plt.figure(figsize=(20, 5))
-    plt.scatter(freq_amp.freq.values, freq_amp.amp.values, s=10, color='red')
-    plt.plot(freqs, amps)
+    plt.scatter(freq_amp.freq.values, freq_amp.amp.values, 'x', s=10, color='red', zorder=2)
+    plt.plot(freqs, amps, zorder=1)
     plt.title("Lomb-Scargle Periodogram with peaks")
     plt.xlabel("Frequency (1/day)")
     plt.ylabel("Amplitude (ppt)")
     plt.savefig(f'pw/{name}/pg_final', bbox_inches='tight')
 
     # Save the frequencies and amplitudes
-    freq_amp.to_csv(f'pw/{star}_frequencies.csv', index=False)
-    print('Done! TIC{star}')
+    freq_amp.to_csv(f'pw/{name}/frequencies.csv', index=False)
+    print(f'Done! {name}')
     return peaks, freq_amp.freq.values, freq_amp.amp.values
 
 if __name__ == "__main__":
-    stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
-    # stars = [17372709]
+    # stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
+    stars = [17372709]
     for star in stars:
         lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=120, author="SPOC").download_all()
         if lc_collection is None:
@@ -196,11 +165,12 @@ if __name__ == "__main__":
             # Extract time and flux from the light curve
             time, flux = lc.time.value, lc.flux.value
 
-            print(len(time))
-            # # Pre-whiten the light curve
-            # peaks, peak_freqs, peak_amps = prewhitener(time, flux, f_sigma=5,
-            #                                    snr_threshold=5,
-            #                                    remove_harmonics=True, name=star)
+            # print(len(time))
+            # Pre-whiten the light curve
+            peaks, peak_freqs, peak_amps = prewhitener(time, flux, 
+                                                snr_threshold=5,
+                                                nearby_peaks_tolerance=0.1,
+                                                remove_harmonics=True, name='TIC'+str(star))
 
     
 
