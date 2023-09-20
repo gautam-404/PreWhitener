@@ -4,9 +4,12 @@ import lightkurve as lk
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+# from lightkurve import periodogram
+from astropy import units
 from astropy.timeseries import LombScargle
 from scipy.optimize import curve_fit
 from scipy.signal import find_peaks, peak_widths, peak_prominences
+from scipy.ndimage import median_filter
 
 
 def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
@@ -28,7 +31,7 @@ def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
     return freq, amp
 
 
-def is_harmonic(f1, f2, tolerance=0.01):
+def is_harmonic(f1, f2, tolerance):
     ratio = f2 / f1
     closest_integer = round(ratio)
     is_harmonic = abs(ratio - closest_integer) < tolerance
@@ -44,9 +47,9 @@ def is_harmonic(f1, f2, tolerance=0.01):
 def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
-def prewhitener(time, flux, f_sigma=3, max_iterations=5,
-                remove_harmonics=True, harmonic_tolerance=0.005,  
-                fmin=None, fmax=90, nyq_mult=1, oversample_factor=5, name='star'):
+def prewhitener(time, flux, f_sigma=3, max_iterations=50, snr_threshold=5,
+                remove_harmonics=True, harmonic_tolerance=0.001,  
+                fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
     else:
@@ -74,7 +77,8 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5,
         prominence = np.median(prominence_data[0])
         peaks_widths_i = peak_widths(amps_i, peaks=peaks_tmp, rel_height=0.5, prominence_data=prominence_data)[0]
         width = np.median(peaks_widths_i)  ## median fwhm 
-        distance = width/(np.median(np.diff(freqs_i)))
+        # distance = width/(np.median(np.diff(freqs_i)))
+        distance = len(amps_i)/width
 
         ## Find all peaks that fit the above criteria
         peaks_i = find_peaks(amps_i, height=np.median(amps_i)+f_sigma*np.std(amps_i), 
@@ -84,6 +88,7 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5,
         
         ## If no peaks are found, break the loop
         if len(peaks_i) == 0:
+            print('No more peaks found')
             break
             
         # Periodogram before pre-whitening
@@ -93,9 +98,6 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5,
         ax1.set_title("Before")
         ax1.set_xlabel("Frequency (1/day)")
         ax1.set_ylabel("Amplitude (ppt)")
-        ax1.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
-        double_digit = "0" if n<9 else ""
-        plt.savefig(f'pw/{name}/pg_{double_digit}{n+1}', bbox_inches='tight')
 
         ## Add the peaks to the list
         peaks += peaks_i
@@ -113,15 +115,21 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5,
             peak_amps.append(params[0]*1000)
             flux_i -= sinusoidal_model(time, *params)
 
-        # Periodogram after pre-whitening
-        ax2.cla()
+        #### Stop checks ####
         freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
         amps_i *= 1000 # convert to ppt
+        noise = median_filter(amps_i, size=int(len(amps_i)/1000), mode='nearest')
+        snr = amps_i/noise
+        if max(snr) < snr_threshold:
+            print('SNR threshold reached')
+            break
+
+        # Periodogram after pre-whitening
+        ax2.cla()
         ax2.plot(freqs_i, amps_i)
         ax2.set_title("After")
         ax2.set_xlabel("Frequency (1/day)")
         ax2.set_ylabel("Amplitude (ppt)")
-        ax2.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
         ax2.set_xlim(ax1.get_xlim())
         ax2.set_ylim(ax1.get_ylim())
         double_digit = "0" if n<9 else ""
@@ -134,18 +142,17 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5,
     freq_amp = freq_amp.sort_values(by='freq', ascending=False)
     if remove_harmonics:
         # # # Harmonic ratio checking
-        tolerance = harmonic_tolerance
         harmonics_idx = []
         for i in range(len(freq_amp)):
             for j in range(i+1, len(freq_amp)):
-                if is_harmonic(freq_amp.iloc[i]['freq'], freq_amp.iloc[j]['freq'], tolerance=tolerance):
+                if is_harmonic(freq_amp.iloc[i]['freq'], freq_amp.iloc[j]['freq'], tolerance=harmonic_tolerance):
                     harmonics_idx.append(j)
         freq_amp = freq_amp.drop(index=harmonics_idx)
     
     # Final periodogram after pre-whitening
     freqs, amps = amp_spectrum(t=time, y=flux, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
     amps *= 1000 # convert to ppt
-    plt.figure()
+    plt.figure(figsize=(20, 5))
     plt.scatter(freq_amp.freq.values, freq_amp.amp.values, s=10, color='red')
     plt.plot(freqs, amps)
     plt.title("Lomb-Scargle Periodogram with peaks")
@@ -155,27 +162,35 @@ def prewhitener(time, flux, f_sigma=3, max_iterations=5,
 
     # Save the frequencies and amplitudes
     freq_amp.to_csv(f'pw/{star}_frequencies.csv', index=False)
-    print('Done!')
+    print('Done! TIC{star}')
     return peaks, freq_amp.freq.values, freq_amp.amp.values
 
 if __name__ == "__main__":
-    # star = 'TIC171591531'
-    star = 'TIC17372709'
-    # star = 'HD20203'
-    # star = 'HD47129'
-    # star = 'V647Tau'
+    stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
+    # stars = [17372709]
+    for star in stars:
+        lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=120, author="SPOC").download_all()
+        if lc_collection is None:
+            print (f"No 2-min LK for TIC{star}, try FFI data...")
+            lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=600, author="TESS-SPOC").download_all()
+        if lc_collection is None:
+            print (f"No FFI LK for TIC{star}, passing...")
+            pass
+        else:
+            lc = lc_collection[0].normalize() # defaults to pdcsap_flux now.
+            for l in lc_collection[1:]:
+                lc = lc.append(l.normalize())
+            lc = lc.remove_nans().remove_outliers()
 
-    lc_collection = lk.search_lightcurve(star, mission="TESS", cadence=120, author="SPOC").download_all()
-    lc = lc_collection[0].normalize() # defaults to pdcsap_flux now.
-    for l in lc_collection[1:]:
-        lc = lc.append(l.normalize())
-    lc = lc.remove_nans().remove_outliers()
+            # Extract time and flux from the light curve
+            time, flux = lc.time.value, lc.flux.value
 
-    # Extract time and flux from the light curve
-    time, flux = lc.time.value, lc.flux.value
+            print(len(time))
+            # # Pre-whiten the light curve
+            # peaks, peak_freqs, peak_amps = prewhitener(time, flux, f_sigma=5,
+            #                                    snr_threshold=5,
+            #                                    remove_harmonics=True, name=star)
 
-    # Pre-whiten the light curve
-    peaks, peak_freqs, peak_amps = prewhitener(time, flux, f_sigma=5, 
-                                               remove_harmonics=True, harmonic_tolerance=0.005,
-                                               max_iterations=20, name=star)
+    
+
 
