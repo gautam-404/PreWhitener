@@ -31,24 +31,12 @@ def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
     return freq, amp
 
 
-def is_harmonic(f1, f2, tolerance):
-    ratio = f2 / f1
-    closest_integer = round(ratio)
-    is_harmonic = abs(ratio - closest_integer) < tolerance
-
-    # Check for sub-harmonics
-    sub_ratio = f1 / f2  # inverse of the original ratio
-    closest_sub_integer = round(sub_ratio)
-    is_sub_harmonic = abs(sub_ratio - closest_sub_integer) < tolerance
-    return is_harmonic or is_sub_harmonic
-
-
 # Sinusoidal function to fit the peaks
 def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
 def prewhitener(time, flux, max_iterations=100, snr_threshold=5, nearby_peaks_tolerance=0.1,
-                remove_harmonics=True, harmonic_tolerance=0.001,  
+                remove_harmonics=True, harmonic_tolerance=0.01,  
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
@@ -106,34 +94,28 @@ def prewhitener(time, flux, max_iterations=100, snr_threshold=5, nearby_peaks_to
     ## Creating a dataframe with the peaks
     freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps})
 
-    ## Sorting the peaks by amplitude
-    freq_amp = freq_amp.sort_values(by='freq', ascending=False)
-    if remove_harmonics:
-        # # # Harmonic ratio checking
-        harmonics_idx = []
-        for i in range(len(freq_amp)):
-            for j in range(i+1, len(freq_amp)):
-                if is_harmonic(freq_amp.iloc[i]['freq'], freq_amp.iloc[j]['freq'], tolerance=harmonic_tolerance):
-                    harmonics_idx.append(j)
-        freq_amp = freq_amp.drop(index=harmonics_idx)
-
-    ## Remove overlapping or very nearby peaks, keeping the highest amplitude one
-    freq_amp = freq_amp.sort_values(by=['freq', 'amp'], ascending=False)
+    ## Sorting the peaks by freq
+    freq_amp = freq_amp.sort_values(by='freq', ascending=True)
     freq_amp = freq_amp.reset_index(drop=True)
-    to_drop = []
-    for i in range(len(freq_amp)-1):
-        if freq_amp.iloc[i]['freq'] - freq_amp.iloc[i+1]['freq'] < nearby_peaks_tolerance:
-            if freq_amp.iloc[i]['amp'] < freq_amp.iloc[i+1]['amp']:
-                to_drop.append(i)
-            else:
-                to_drop.append(i+1)
-    freq_amp = freq_amp.drop(index=to_drop)
+    if remove_harmonics:
+        ### Harmonic ratio checking
+        harmonics_idx = []
+        for i in range(len(freq_amp)-1):
+            for j in range(i+1, len(freq_amp)):
+                ratio = freq_amp.iloc[i]['freq']/freq_amp.iloc[j]['freq']
+                closest_integer = round(ratio)
+                if abs(ratio-closest_integer) < harmonic_tolerance:
+                    if freq_amp.iloc[i]['amp'] > freq_amp.iloc[j]['amp']:
+                        harmonics_idx.append(j)
+                    else:
+                        harmonics_idx.append(i)
+        freq_amp = freq_amp.drop(index=harmonics_idx)
     
     # Final periodogram after pre-whitening
     freqs, amps = amp_spectrum(t=time, y=flux, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
     amps *= 1000 # convert to ppt
     plt.figure(figsize=(20, 5))
-    plt.scatter(freq_amp.freq.values, freq_amp.amp.values, 'x', s=10, color='red', zorder=2)
+    plt.scatter(freq_amp.freq.values, freq_amp.amp.values, marker='x', s=10, color='red', zorder=2)
     plt.plot(freqs, amps, zorder=1)
     plt.title("Lomb-Scargle Periodogram with peaks")
     plt.xlabel("Frequency (1/day)")
@@ -145,14 +127,18 @@ def prewhitener(time, flux, max_iterations=100, snr_threshold=5, nearby_peaks_to
     print(f'Done! {name}')
     return peaks, freq_amp.freq.values, freq_amp.amp.values
 
+
+
 if __name__ == "__main__":
-    # stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
-    stars = [17372709]
+    stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
+    # stars = [17372709]
     for star in stars:
         lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=120, author="SPOC").download_all()
+        fmax = 90
         if lc_collection is None:
             print (f"No 2-min LK for TIC{star}, try FFI data...")
             lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=600, author="TESS-SPOC").download_all()
+            fmax = 72
         if lc_collection is None:
             print (f"No FFI LK for TIC{star}, passing...")
             pass
@@ -165,12 +151,11 @@ if __name__ == "__main__":
             # Extract time and flux from the light curve
             time, flux = lc.time.value, lc.flux.value
 
-            # print(len(time))
             # Pre-whiten the light curve
-            peaks, peak_freqs, peak_amps = prewhitener(time, flux, 
+            peaks, peak_freqs, peak_amps = prewhitener(time, flux, fmax=fmax, 
                                                 snr_threshold=5,
-                                                nearby_peaks_tolerance=0.1,
-                                                remove_harmonics=True, name='TIC'+str(star))
+                                                remove_harmonics=True, harmonic_tolerance=0.01,
+                                                name='TIC'+str(star))
 
     
 
