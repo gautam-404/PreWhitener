@@ -240,9 +240,11 @@ if __name__ == "__main__":
     # stars = [17372709]
     for star in stars:
         lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=120, author="SPOC").download_all()
+        f_max = 90
         if lc_collection is None:
             print (f"No 2-min LK for TIC{star}, try FFI data...")
             lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=600, author="TESS-SPOC").download_all()
+            f_max = 72
         if lc_collection is None:
             print (f"No FFI LK for TIC{star}, passing...")
             pass
@@ -256,7 +258,7 @@ if __name__ == "__main__":
             time, flux = lc.time.value, lc.flux.value
 
             # Pre-whiten the light curve
-            peak_freqs, peak_amps = prewhitener_single(time, flux,
+            peak_freqs, peak_amps = prewhitener_single(time, flux, fmax=f_max,
                                                snr_threshold=5,
                                                remove_harmonics=True, name='TIC'+str(star))
 
