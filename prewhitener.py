@@ -136,6 +136,7 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
 
     # Save the frequencies and amplitudes
     freq_amp.to_csv(f'pw/{name}/frequencies.csv', index=False)
+    print(f'Done {name}')
     return freq_amp.freq.values, freq_amp.amp.values
 
 
@@ -231,6 +232,7 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
 
     # Save the frequencies and amplitudes
     freq_amp.to_csv(f'pw/{name}/frequencies.csv', index=False)
+    print(f'Done {name}')
     return freq_amp.freq.values, freq_amp.amp.values
 
 if __name__ == "__main__":
@@ -253,11 +255,10 @@ if __name__ == "__main__":
             # Extract time and flux from the light curve
             time, flux = lc.time.value, lc.flux.value
 
-            # print(len(time))
             # Pre-whiten the light curve
-            peaks, peak_freqs, peak_amps = prewhitener_single(time, flux, f_sigma=5,
+            peak_freqs, peak_amps = prewhitener_single(time, flux,
                                                snr_threshold=5,
-                                               remove_harmonics=True, name=star)
+                                               remove_harmonics=True, name='TIC'+str(star))
 
     
 
