@@ -120,8 +120,8 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
     if remove_harmonics:
         freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
 
-    # ## Remove overlapping or very nearby peaks, keep the highest amplitude one
-    # freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=0.01)
+    ## Remove overlapping or very nearby peaks, keep the highest amplitude one
+    freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=0.01)
 
     # Final periodogram after pre-whitening
     freqs, amps = amp_spectrum(t=time, y=flux, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
@@ -237,6 +237,7 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
 
 if __name__ == "__main__":
     stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
+    # stars = pd.read_csv('stars.csv')['TIC'].values
     # stars = [17372709]
     for star in stars:
         lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=120, author="SPOC").download_all()
