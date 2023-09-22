@@ -169,7 +169,9 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
         peaks_widths_i = peak_widths(amps_i, peaks=peaks_tmp, rel_height=0.5, prominence_data=prominence_data)[0]
         width = np.median(peaks_widths_i)  ## median fwhm 
         # distance = width/(np.median(np.diff(freqs_i)))
-        distance = len(amps_i)/width
+        # distance = len(amps_i)/width
+        fs = 720
+        distance = fs / (1/27)
 
         ## Find all peaks that fit the above criteria
         peaks_i = find_peaks(amps_i, height=np.median(amps_i)+f_sigma*np.std(amps_i), 
@@ -232,7 +234,7 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
     plt.ylabel("Amplitude (ppt)")
     plt.savefig(f'pw/{name}/pg_final', bbox_inches='tight')
     plt.close()
-    
+
     # Save the frequencies and amplitudes
     freq_amp.to_csv(f'pw/{name}/frequencies.csv', index=False)
     print(f'Done {name}')
