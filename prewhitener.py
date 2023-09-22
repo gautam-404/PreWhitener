@@ -43,7 +43,9 @@ def harmonics_check(df, harmonic_tolerance=0.01):
                     harmonics_ids.append(j)
                 else:
                     harmonics_ids.append(i)
-    return df.drop(index=harmonics_ids)
+    df['harmonic'] = [1 if i in harmonics_ids else 0 for i in range(len(df))]
+    return df
+    # return df.drop(index=harmonics_ids)
 
 def remove_overlapping_freqs(df, nearby_tolerance=0.01):
     df = df.sort_values(by=['freq', 'amp'], ascending=False)
@@ -63,7 +65,7 @@ def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
 def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
-                remove_harmonics=True, harmonic_tolerance=0.001,  
+                flag_harmonics=True, harmonic_tolerance=0.001,  
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
@@ -117,7 +119,7 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
 
     freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps})
 
-    if remove_harmonics:
+    if flag_harmonics:
         freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
 
     ## Remove overlapping or very nearby peaks, keep the highest amplitude one
@@ -141,7 +143,7 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
 
 
 def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3,
-                remove_harmonics=True, harmonic_tolerance=0.001,  
+                flag_harmonics=True, harmonic_tolerance=0.001,  
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
@@ -213,7 +215,7 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
 
     freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps})
 
-    if remove_harmonics:
+    if flag_harmonics:
         freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
 
     ## Remove overlapping or very nearby peaks, keep the highest amplitude one
@@ -261,7 +263,7 @@ if __name__ == "__main__":
             # Pre-whiten the light curve
             peak_freqs, peak_amps = prewhitener_single(time, flux, fmax=f_max,
                                                snr_threshold=5,
-                                               remove_harmonics=True, name='TIC'+str(star))
+                                               flag_harmonics=True, name='TIC'+str(star))
 
     
 
