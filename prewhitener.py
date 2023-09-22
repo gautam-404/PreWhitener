@@ -231,15 +231,16 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
     plt.xlabel("Frequency (1/day)")
     plt.ylabel("Amplitude (ppt)")
     plt.savefig(f'pw/{name}/pg_final', bbox_inches='tight')
-
+    plt.close()
+    
     # Save the frequencies and amplitudes
     freq_amp.to_csv(f'pw/{name}/frequencies.csv', index=False)
     print(f'Done {name}')
     return freq_amp.freq.values, freq_amp.amp.values
 
 if __name__ == "__main__":
-    stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
-    # stars = pd.read_csv('stars.csv')['TIC'].values
+    # stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
+    stars = pd.read_csv('cepher_pulsating_tics.csv')['TIC'].values
     # stars = [17372709]
     for star in stars:
         lc_collection = lk.search_lightcurve("TIC"+str(star), mission="TESS", cadence=120, author="SPOC").download_all()
