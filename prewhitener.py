@@ -31,34 +31,31 @@ def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
     return freq, amp
 
 def harmonics_check(df, harmonic_tolerance=0.01):
-    df = df.sort_values(by='freq', ascending=False)
+    df = df.sort_values(by='freq', ascending=True)
     df = df.reset_index(drop=True)
-    harmonics_ids = []
+    harmonic_idx = []
     for i in range(len(df)-1):
-        for j in range(i+1, len(df)-1):
-            ratio = df.iloc[i]['freq']/df.iloc[j]['freq']
+        for j in range(i+1, len(df)):
+            ratio = df.iloc[j]['freq']/df.iloc[i]['freq']
             closest_integer = round(ratio)
-            if abs(ratio-closest_integer) < harmonic_tolerance:
-                if df.iloc[i]['amp'] > df.iloc[j]['amp']:
-                    harmonics_ids.append(j)
-                else:
-                    harmonics_ids.append(i)
-    df['harmonic'] = [1 if i in harmonics_ids else 0 for i in range(len(df))]
+            if abs(ratio-closest_integer) < harmonic_tolerance and closest_integer > 1:
+                df.loc[j, 'label'] = f'H{closest_integer}F{i}'
+                harmonic_idx.append(j)
+    base_idx = ~df.index.isin(harmonic_idx)
+    df.loc[base_idx, 'label'] = [f'F{i}' for i in range(0, sum(base_idx))]
     return df
-    # return df.drop(index=harmonics_ids)
 
 def remove_overlapping_freqs(df, nearby_tolerance=0.01):
     df = df.sort_values(by=['freq', 'amp'], ascending=False)
     df = df.reset_index(drop=True)
     to_drop = []
     for i in range(len(df)-1):
-        if df.iloc[i]['freq'] - df.iloc[i+1]['freq'] < 0.2:
+        if df.iloc[i]['freq'] - df.iloc[i+1]['freq'] < nearby_tolerance:
             if df.iloc[i]['amp'] < df.iloc[i+1]['amp']:
                 to_drop.append(i)
             else:
                 to_drop.append(i+1)
     return df.drop(index=to_drop)
-
 
 # Sinusoidal function to fit the peaks
 def sinusoidal_model(t, A, omega, phi, C):
@@ -73,7 +70,6 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
         shutil.rmtree(f'pw/{name}')
         os.makedirs(f'pw/{name}')
 
-    ## Normalize the flux
     flux_i = copy.deepcopy(flux)
 
     peak_freqs = []
@@ -117,13 +113,13 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
             # print('SNR threshold reached')
             break
 
-    freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps})
-
-    if flag_harmonics:
-        freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
+    freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps}).sort_values(by='freq')
 
     ## Remove overlapping or very nearby peaks, keep the highest amplitude one
     freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=0.01)
+              
+    if flag_harmonics:
+        freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
 
     # Final periodogram after pre-whitening
     freqs, amps = amp_spectrum(t=time, y=flux, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
@@ -151,7 +147,6 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
         shutil.rmtree(f'pw/{name}')
         os.makedirs(f'pw/{name}')
 
-    ## Normalize the flux
     flux_i = copy.deepcopy(flux)
 
     peak_freqs = []
@@ -215,13 +210,13 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
             continue
         break
 
-    freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps})
-
-    if flag_harmonics:
-        freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
+    freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps}).sort_values(by='freq')
 
     ## Remove overlapping or very nearby peaks, keep the highest amplitude one
     freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=0.01)
+              
+    if flag_harmonics:
+        freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
 
     # Final periodogram after pre-whitening
     freqs, amps = amp_spectrum(t=time, y=flux, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
