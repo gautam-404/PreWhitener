@@ -141,7 +141,7 @@ def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
 def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
-                flag_harmonics=True, harmonic_tolerance=0.001, nearby_tolerance=0.001,
+                flag_harmonics=True, harmonic_tolerance=0.01, nearby_tolerance=0.001,
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     '''
     Pre-whitening the light curve by fitting sinusoids to the peaks in the amplitude spectrum.
@@ -249,7 +249,7 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
 
 
 def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3,
-                flag_harmonics=True, harmonic_tolerance=0.001, nearby_tolerance=0.01,
+                flag_harmonics=True, harmonic_tolerance=0.01, nearby_tolerance=0.01,
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     '''
     Pre-whitening the light curve by fitting sinusoids to the peaks in the amplitude spectrum.
@@ -377,6 +377,8 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
     freq_amp.to_csv(f'pw/{name}/frequencies.csv', index=False)
     print(f'Done {name}')
     return freq_amp.freq.values, freq_amp.amp.values
+
+
 
 if __name__ == "__main__":
     # stars = [189127221,193893464,469421586,158374262,237162793,20534584,235612106,522220718,15997013,120893795]
