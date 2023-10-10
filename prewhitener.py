@@ -13,6 +13,33 @@ from scipy.ndimage import median_filter
 
 
 def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
+    '''
+    Calculate the amplitude spectrum of the time series y(t)
+    
+    Parameters
+    ----------
+    t : array_like
+        The time series
+    y : array_like
+        Flux or magnitude time series
+    fmin : float
+        Minimum frequency to calculate the amplitude spectrum
+    fmax : float
+        Maximum frequency to calculate the amplitude spectrum
+    nyq_mult : float
+        Multiple of the Nyquist frequency to use as the maximum frequency
+    oversample_factor : float
+        Oversample factor for the frequency grid
+
+    Returns
+    -------
+    freq : array_like
+        Frequency grid
+    amp : array_like
+        Amplitude spectrum
+
+    Written by Simon J. Murphy
+    '''
     tmax = t.max()
     tmin = t.min()
     df = 1.0 / (tmax - tmin)
@@ -31,6 +58,23 @@ def amp_spectrum(t, y, fmin=None, fmax=None, nyq_mult=1., oversample_factor=5.):
     return freq, amp
 
 def harmonics_check(df, harmonic_tolerance=0.01):
+    '''
+    Harmonics check for the frequencies in the amplitude spectrum.
+    If two frequencies are within the harmonic tolerance, the lower
+    frequency is kept and the higher one is labelled as a harmonic.
+    
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame with columns 'freq' and 'amp'
+    harmonic_tolerance : float
+        Harmonic tolerance in frequency units
+    
+    Returns
+    -------
+    df : pandas.DataFrame
+        DataFrame with columns 'freq', 'amp' and 'label'
+    '''
     df = df.sort_values(by='freq', ascending=True)
     df = df.reset_index(drop=True)
     harmonic_idx = []
@@ -46,6 +90,21 @@ def harmonics_check(df, harmonic_tolerance=0.01):
     return df
 
 def remove_overlapping_freqs(df, nearby_tolerance=0.01):
+    '''
+    Remove overlapping or very nearby frequencies from the amplitude spectrum.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame with columns 'freq' and 'amp'
+    nearby_tolerance : float
+        Tolerance in frequency units
+
+    Returns
+    -------
+    df : pandas.DataFrame
+        DataFrame with columns 'freq' and 'amp' with overlapping frequencies removed
+    '''
     df = df.sort_values(by=['freq', 'amp'], ascending=False)
     df = df.reset_index(drop=True)
     to_drop = []
@@ -57,13 +116,62 @@ def remove_overlapping_freqs(df, nearby_tolerance=0.01):
                 to_drop.append(i+1)
     return df.drop(index=to_drop)
 
-# Sinusoidal function to fit the peaks
 def sinusoidal_model(t, A, omega, phi, C):
+    '''
+    Sinusoidal function to fit the peaks
+
+    Parameters
+    ----------
+    t : array_like
+        Time series
+    A : float
+        Amplitude
+    omega : float
+        Angular frequency
+    phi : float
+        Phase
+    C : float
+        Constant
+
+    Returns
+    -------
+    y : array_like
+        Sinusoidal function
+    '''
     return A * np.sin(omega * t + phi) + C
 
 def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
                 flag_harmonics=True, harmonic_tolerance=0.001,  
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
+    '''
+    Pre-whitening the light curve by fitting sinusoids to the peaks in the amplitude spectrum.
+    The highest peak is fit and removed, and the process is repeated until the SNR threshold is reached.
+
+    Parameters
+    ----------
+    time : array_like
+        Time series
+    flux : array_like
+        Flux or magnitude time series
+    max_iterations : int
+        Maximum number of iterations
+    snr_threshold : float
+        SNR threshold to stop the pre-whitening
+    flag_harmonics : bool
+        Flag to check for harmonics
+    harmonic_tolerance : float
+        Harmonic tolerance in frequency units
+    fmin : float
+        Minimum frequency to calculate the amplitude spectrum
+    fmax : float
+        Maximum frequency to calculate the amplitude spectrum
+    nyq_mult : float
+        Multiple of the Nyquist frequency to use as the maximum frequency   
+    oversample_factor : float
+        Oversample factor for the frequency grid
+    name : str
+        Name of the star. Used to save the plots and frequencies
+    '''
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
     else:
@@ -141,6 +249,37 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
 def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3,
                 flag_harmonics=True, harmonic_tolerance=0.001,  
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
+    '''
+    Pre-whitening the light curve by fitting sinusoids to the peaks in the amplitude spectrum.
+    Multiple peaks are fit and removed, and the process is repeated until the SNR threshold is reached.
+
+    Parameters
+    ----------
+    time : array_like
+        Time series
+    flux : array_like
+        Flux or magnitude time series
+    max_iterations : int
+        Maximum number of iterations
+    snr_threshold : float
+        SNR threshold to stop the pre-whitening
+    f_sigma : float
+        Number of standard deviations above the mean to use as the minimum height for the peaks
+    flag_harmonics : bool
+        Flag to check for harmonics
+    harmonic_tolerance : float
+        Harmonic tolerance in frequency units
+    fmin : float
+        Minimum frequency to calculate the amplitude spectrum
+    fmax : float
+        Maximum frequency to calculate the amplitude spectrum
+    nyq_mult : float
+        Multiple of the Nyquist frequency to use as the maximum frequency   
+    oversample_factor : float
+        Oversample factor for the frequency grid
+    name : str
+        Name of the star. Used to save the plots and frequencies
+    '''
     if not os.path.exists(f'pw/{name}'):
         os.makedirs(f'pw/{name}')
     else:
