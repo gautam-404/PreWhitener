@@ -141,7 +141,7 @@ def sinusoidal_model(t, A, omega, phi, C):
     return A * np.sin(omega * t + phi) + C
 
 def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
-                flag_harmonics=True, harmonic_tolerance=0.001,  
+                flag_harmonics=True, harmonic_tolerance=0.001, nearby_tolerance=0.001,
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     '''
     Pre-whitening the light curve by fitting sinusoids to the peaks in the amplitude spectrum.
@@ -161,6 +161,8 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
         Flag to check for harmonics
     harmonic_tolerance : float
         Harmonic tolerance in frequency units
+    nearby_tolerance : float
+        Tolerance for overlapping or very nearby frequencies in frequency units
     fmin : float
         Minimum frequency to calculate the amplitude spectrum
     fmax : float
@@ -224,7 +226,7 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
     freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps}).sort_values(by='freq')
 
     ## Remove overlapping or very nearby peaks, keep the highest amplitude one
-    freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=0.01)
+    freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=nearby_tolerance)
               
     if flag_harmonics:
         freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
@@ -247,7 +249,7 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
 
 
 def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3,
-                flag_harmonics=True, harmonic_tolerance=0.001,  
+                flag_harmonics=True, harmonic_tolerance=0.001, nearby_tolerance=0.01,
                 fmin=5, fmax=72, nyq_mult=1, oversample_factor=5, name='star'):
     '''
     Pre-whitening the light curve by fitting sinusoids to the peaks in the amplitude spectrum.
@@ -269,6 +271,8 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
         Flag to check for harmonics
     harmonic_tolerance : float
         Harmonic tolerance in frequency units
+    nearby_tolerance : float
+        Tolerance for overlapping or very nearby frequencies in frequency units
     fmin : float
         Minimum frequency to calculate the amplitude spectrum
     fmax : float
@@ -352,7 +356,7 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
     freq_amp = pd.DataFrame({'freq': peak_freqs, 'amp': peak_amps}).sort_values(by='freq')
 
     ## Remove overlapping or very nearby peaks, keep the highest amplitude one
-    freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=0.01)
+    freq_amp = remove_overlapping_freqs(freq_amp, nearby_tolerance=nearby_tolerance)
               
     if flag_harmonics:
         freq_amp = harmonics_check(freq_amp, harmonic_tolerance=harmonic_tolerance)
