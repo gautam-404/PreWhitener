@@ -187,6 +187,8 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
 
     ## Initial amplitude spectrum
     freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
+    amps_i *= 1000 # convert to ppt
+    median_window_size = int(len(amps_i)*np.median(np.diff(freqs_i)))
     for n in range(max_iterations):
         ## Find all peaks
         peaks_i = find_peaks(amps_i)[0]
@@ -217,7 +219,7 @@ def prewhitener_single(time, flux, max_iterations=100, snr_threshold=5,
         amps_i *= 1000 # convert to ppt
 
         ### SNR stopping condition ###
-        noise = median_filter(amps_i, size=int(len(amps_i)*(freqs_i[1]-freqs_i[0])))
+        noise = median_filter(amps_i, size=median_window_size)
         snr = np.max(amps_i) / np.median(noise)
         if snr < snr_threshold:
             # print('SNR threshold reached')
@@ -298,6 +300,8 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
 
     ## Initial amplitude spectrum
     freqs_i, amps_i = amp_spectrum(t=time, y=flux_i, fmin=fmin, fmax=fmax, nyq_mult=nyq_mult, oversample_factor=oversample_factor)
+    amps_i *= 1000 # convert to ppt
+    median_window_size = int(len(amps_i)*np.median(np.diff(freqs_i)))
     for n in range(max_iterations):
         ## Find all peaks to calculate the median prominence and width
         peaks_tmp = find_peaks(amps_i)[0]
@@ -340,7 +344,7 @@ def prewhitener_multi(time, flux, max_iterations=100, snr_threshold=5, f_sigma=3
             amps_i *= 1000 # convert to ppt
 
             ### SNR stopping condition ###
-            noise = median_filter(amps_i, size=int(len(amps_i)*(freqs_i[1]-freqs_i[0])))
+            noise = median_filter(amps_i, size=median_window_size)
             snr = np.max(amps_i) / np.median(noise)
             if snr < snr_threshold:
                 # print('SNR threshold reached')
