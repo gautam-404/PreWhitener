@@ -5,7 +5,7 @@ with open('requirements.txt') as f:
 
 
 setup(
-    name='prewhitener',
+    name='PreWhitener',
     version='1.0.0-beta',
     packages=find_packages(),
     install_requires=required,

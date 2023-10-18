@@ -278,12 +278,11 @@ class PreWhitener:
         '''
         ax = ax if ax is not None else plt.gca()
 
-        ## Separate scatter and plot kwargs ##
+        ## Separate the scatter and plot kwargs ##
         scatter_args = list(inspect.signature(plt.scatter).parameters)
         scatter_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in scatter_args}
         plot_args = list(inspect.signature(plt.plot).parameters)
         plot_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in plot_args}
-
 
         if isinstance(self.f_container, pd.DataFrame):
             if self.mode == 'amplitude':
