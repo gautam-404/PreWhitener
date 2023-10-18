@@ -127,8 +127,8 @@ class PreWhitener:
         self.oversample_factor = oversample_factor
         self.mode = mode
 
-        self.pg_og = Periodogram(self.t, self.data, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, mode=mode)
-        self.pg_iter = copy.deepcopy(self.pg_og)
+        self.pg = Periodogram(self.t, self.data, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, mode=mode)
+        self.pg_iter = copy.deepcopy(self.pg)
 
         self.iteration = 0
         self.stop_iteration = False
@@ -165,7 +165,7 @@ class PreWhitener:
             # Extract time and flux from the light curve
             self.t, self.data = lc.time.value, lc.flux.value
             return True
-        
+   
     def nyquist_frequency(self):
         '''
         Calculate the Nyquist frequency
@@ -177,7 +177,7 @@ class PreWhitener:
         '''
         Calculate the noise level of the light curve
         '''
-        return np.median(self.pg_og.amps)*self.snr_threshold if self.mode == 'amplitude' else np.median(self.pg_og.powers)*self.snr_threshold
+        return np.median(self.pg.amps)*self.snr_threshold if self.mode == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
 
     def iterate(self):
         '''
@@ -193,7 +193,7 @@ class PreWhitener:
             Power spectrum
         '''
         if self.iteration == 0:
-            self.pg_iter = copy.deepcopy(self.pg_og)
+            self.pg_iter = copy.deepcopy(self.pg)
         self.pg_iter.amplitude_power_spectrum(self.t, self.data_iter)
         freqs_i = self.pg_iter.freqs
         if self.mode == 'amplitude':
@@ -287,11 +287,11 @@ class PreWhitener:
 
         if isinstance(self.f_container, pd.DataFrame):
             if self.mode == 'amplitude':
-                ax.plot(self.pg_og.freqs, self.pg_og.amps*1000, **plot_dict)
+                ax.plot(self.pg.freqs, self.pg.amps*1000, **plot_dict)
                 ax.scatter(self.f_container['freq'], self.f_container['amp']*1000, marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_dict)
                 ax.set_ylabel("Amplitude (ppt)")
             if self.mode == 'power':
-                ax.plot(self.pg_og.freqs, self.pg_og.powers, **plot_dict)
+                ax.plot(self.pg.freqs, self.pg.powers, **plot_dict)
                 ax.scatter(self.f_container['freq'], self.f_container['amp'], marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_dict)
                 ax.set_ylabel("Power (ppt)")
             ax.set_xlabel("Frequency (1/day)")
@@ -390,8 +390,6 @@ class PreWhitener:
             if amp < local_noise:
                 to_drop.append(i)
         return df.drop(index=to_drop)
-        
-
         
 
 
