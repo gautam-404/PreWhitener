@@ -102,6 +102,7 @@ class PreWhitener:
             else: 
                 raise ValueError('Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lc`')
         else:
+            self.fbounds = (0, 72) if fbounds is None else fbounds
             if isinstance(lc, lk.LightCurve):
                 self.t, self.data = lc.time.value, lc.flux.value
             elif isinstance(lc, pd.DataFrame):
@@ -118,7 +119,7 @@ class PreWhitener:
         self.flag_harmonics = flag_harmonics
         self.harmonic_tolerance = harmonic_tolerance
         self.frequency_resolution = frequency_resolution
-        self.fmin, self.fmax = fbounds if fbounds is not None else (self.fmin, self.fmax)
+        self.fmin, self.fmax = self.fbounds if self.fbounds is not None else (self.fmin, self.fmax)
         self.nyq_mult = nyq_mult
         self.oversample_factor = oversample_factor
         self.mode = mode
@@ -144,13 +145,11 @@ class PreWhitener:
         '''
         print(f'Getting lightkurve data for {self.name}')
         lc_collection = lk.search_lightcurve(self.name, mission="TESS", cadence=120, author="SPOC").download_all()
-        self.fmax = 90
-        self.fmin = 3
+        self.fbounds = (0, 90) if self.fbounds is None else self.fbounds
         if lc_collection is None:
             print (f"No 2-min LK for {self.name}, try FFI data...")
             lc_collection = lk.search_lightcurve(self.name, mission="TESS", cadence=600, author="TESS-SPOC").download_all()
-            self.fmax = 72
-            self.fmin = 3
+            self.fbounds = (0, 72) if self.fbounds is None else self.fbounds
         if lc_collection is None:
             print (f"No FFI LK for {self.name}, passing...")
             return False
