@@ -94,7 +94,6 @@ class PreWhitener:
             Mode of the periodogram ('amplitude' or 'power')
         '''
         self.name = name
-        self.fbounds = fbounds
         if lc is None:
             if name is not None:
                 if not self.get_lightcurve():
@@ -103,7 +102,7 @@ class PreWhitener:
             else: 
                 raise ValueError('Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lc`')
         else:
-            self.fbounds = (0, 72) if fbounds is None else fbounds
+            # self.fbounds = (0, 72) if fbounds is None else fbounds
             if isinstance(lc, lk.LightCurve):
                 self.t, self.data = lc.time.value, lc.flux.value
             elif isinstance(lc, pd.DataFrame):
@@ -113,6 +112,8 @@ class PreWhitener:
             else:
                 raise ValueError('lc must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
                                 Or provide lightkurve searchable ID as name (e.g. TIC, HD, KIC)')
+            
+        self.fbounds = fbounds if fbounds is not None else (0, self.nyquist_frequency() if self.nyquist_frequency() < 200 else 90)
         
         self.data_iter = copy.deepcopy(self.data)
         self.max_iterations = max_iterations
@@ -146,11 +147,11 @@ class PreWhitener:
         '''
         print(f'Getting lightkurve data for {self.name}')
         lc_collection = lk.search_lightcurve(self.name, mission="TESS", cadence=120, author="SPOC").download_all()
-        self.fbounds = (0, 90) if self.fbounds is None else self.fbounds
+        # self.fbounds = (0, 90) if self.fbounds is None else self.fbounds
         if lc_collection is None:
             print (f"No 2-min LK for {self.name}, try FFI data...")
             lc_collection = lk.search_lightcurve(self.name, mission="TESS", cadence=600, author="TESS-SPOC").download_all()
-            self.fbounds = (0, 72) if self.fbounds is None else self.fbounds
+            # self.fbounds = (0, 72) if self.fbounds is None else self.fbounds
         if lc_collection is None:
             print (f"No FFI LK for {self.name}, passing...")
             return False
@@ -163,6 +164,13 @@ class PreWhitener:
             # Extract time and flux from the light curve
             self.t, self.data = lc.time.value, lc.flux.value
             return True
+        
+    def nyquist_frequency(self):
+        '''
+        Calculate the Nyquist frequency
+        '''
+        return 1/(2*np.median(np.diff(self.t)))
+
 
     def noise_level(self):
         '''
