@@ -219,19 +219,22 @@ class PreWhitener:
         ax : matplotlib.axes._subplots.AxesSubplot
         '''
         fig, ax = plt.subplots(figsize=(10, 5))
-        if self.mode == 'amplitude':
-            ax.plot(self.pg_og.freqs, self.pg_og.amps*1000)
-            ax.scatter(self.freqs_amps['freq'], self.freqs_amps['amp']*1000, marker='x', color='maroon', s=10, linewidths=1, zorder=2)
-            ax.set_ylabel("Amplitude (ppt)")
-        if self.mode == 'power':
-            ax.plot(self.pg_og.freqs, self.pg_og.powers)
-            ax.scatter(self.freqs_amps['freq'], self.freqs_amps['amp'], marker='x', color='maroon', s=10, linewidths=1, zorder=2)
-            ax.set_ylabel("Power (ppt)")
-        ax.set_xlabel("Frequency (1/day)")
-        ax.set_xlim(self.fmin, self.fmax)
-        if save:
-            plt.savefig(f'pw/{self.name}/prewhitening.png', dpi=300)
-        return fig, ax
+        if isinstance(self.freqs_amps, pd.DataFrame):
+            if self.mode == 'amplitude':
+                ax.plot(self.pg_og.freqs, self.pg_og.amps*1000)
+                ax.scatter(self.freqs_amps['freq'], self.freqs_amps['amp']*1000, marker='x', color='maroon', s=10, linewidths=1, zorder=2)
+                ax.set_ylabel("Amplitude (ppt)")
+            if self.mode == 'power':
+                ax.plot(self.pg_og.freqs, self.pg_og.powers)
+                ax.scatter(self.freqs_amps['freq'], self.freqs_amps['amp'], marker='x', color='maroon', s=10, linewidths=1, zorder=2)
+                ax.set_ylabel("Power (ppt)")
+            ax.set_xlabel("Frequency (1/day)")
+            ax.set_xlim(self.fmin, self.fmax)
+            if save:
+                plt.savefig(f'pw/{self.name}/prewhitening.png', dpi=300)
+            return fig, ax
+        else:
+            raise ValueError('No frequencies found. Try running post_pw() first')
 
     # Sinusoidal function to fit the peaks
     def sinusoidal_model(self, t, A, omega, phi, C):
