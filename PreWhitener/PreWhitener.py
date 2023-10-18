@@ -204,6 +204,19 @@ class PreWhitener:
             self.post_pw_plot(save=save)
 
     def post_pw_plot(self, save=True):
+        '''
+        Post pre-whitening plot
+
+        Parameters
+        ----------
+        save : bool
+            If True, save the plot
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+        ax : matplotlib.axes._subplots.AxesSubplot
+        '''
         fig, ax = plt.subplots(figsize=(10, 5))
         if self.mode == 'amplitude':
             ax.plot(self.pg_og.freqs, self.pg_og.amps*1000)
@@ -217,8 +230,7 @@ class PreWhitener:
         ax.set_xlim(self.fmin, self.fmax)
         if save:
             plt.savefig(f'pw/{self.name}/prewhitening.png', dpi=300)
-        else:
-            return fig, ax
+        return fig, ax
 
     # Sinusoidal function to fit the peaks
     def sinusoidal_model(self, t, A, omega, phi, C):
