@@ -224,7 +224,7 @@ class PreWhitener:
         if make_plot:
             self.post_pw_plot(save=save)
 
-    def post_pw_plot(self, ax: bool = None, save: bool = True, plot_kwargs: dict = {}, scatter_kwargs: dict = {}) -> matplotlib.axes._axes.Axes:
+    def post_pw_plot(self, ax: matplotlib.axes._axes.Axes = None, save: bool = True, plot_kwargs: dict = {}, scatter_kwargs: dict = {}) -> matplotlib.axes._axes.Axes:
         """
         Post pre-whitening plot
 

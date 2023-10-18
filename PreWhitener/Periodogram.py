@@ -95,7 +95,7 @@ class Periodogram:
         
         Parameters
         ----------
-        ax : matplotlib.axes._subplots.AxesSubplot
+        ax : matplotlib.axes._axes.Axes
             The axes to plot on
         mode : str
             'amplitude' or 'power'
