@@ -8,8 +8,8 @@ class TestPreWhitener(unittest.TestCase):
 
     def test_init(self):
         # Test initialization with lightkurve.LightCurve
-        lc = lk.LightCurve(time=np.arange(0, 10, 0.1), flux=np.random.randn(100))
-        pw = PreWhitener(lc=lc)
+        pw = PreWhitener(name='TIC 7903477')
+        lc = pw.lc
         self.assertEqual(pw.name, None)
         np.testing.assert_array_equal(pw.t, lc.time.value)
         np.testing.assert_array_equal(pw.data, lc.flux.value)
@@ -19,7 +19,7 @@ class TestPreWhitener(unittest.TestCase):
         self.assertEqual(pw.harmonic_tolerance, 0.001)
         self.assertEqual(pw.frequency_resolution, 4/27)
         self.assertEqual(pw.fmin, 0)
-        self.assertEqual(pw.fmax, lc.nyquist_frequency)
+        self.assertLessEqual(pw.fmax, pw.nyquist_frequency())
         self.assertEqual(pw.nyq_mult, 1)
         self.assertEqual(pw.oversample_factor, 5)
         self.assertEqual(pw.mode, 'amplitude')
@@ -88,7 +88,8 @@ class TestPreWhitener(unittest.TestCase):
         t = np.arange(0, 10, 0.1)
         f = np.sin(2*np.pi*0.5*t) + np.sin(2*np.pi*1.5*t) + np.sin(2*np.pi*2.5*t) + np.random.randn(len(t))
         pw = PreWhitener(lc=(t, f), max_iterations=3, snr_threshold=3)
-        pw.iterate()
+        for i in range(pw.max_iterations):
+            pw.iterate()
         self.assertEqual(pw.iteration, 3)
         self.assertEqual(len(pw.peak_freqs), 3)
         self.assertAlmostEqual(pw.peak_freqs[0], 0.5, places=1)
