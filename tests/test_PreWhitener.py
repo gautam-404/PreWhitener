@@ -88,7 +88,7 @@ class TestPreWhitener(unittest.TestCase):
         t = np.arange(0, 10, 0.1)
         f = np.sin(2*np.pi*0.5*t) + np.sin(2*np.pi*1.5*t) + np.sin(2*np.pi*2.5*t) + np.random.randn(len(t))
         pw = PreWhitener(lc=(t, f), max_iterations=3, snr_threshold=3)
-        pw.iterative_prewhitening()
+        pw.iterate()
         self.assertEqual(pw.iteration, 3)
         self.assertEqual(len(pw.peak_freqs), 3)
         self.assertAlmostEqual(pw.peak_freqs[0], 0.5, places=1)

@@ -94,6 +94,7 @@ class PreWhitener:
             Mode of the periodogram ('amplitude' or 'power')
         '''
         self.name = name
+        self.fbounds = fbounds
         if lc is None:
             if name is not None:
                 if not self.get_lightcurve():
