@@ -13,37 +13,37 @@ pw.auto()
 ```
 
 ## Available parameters
-`name`: Default=None, Type: `str`<br>
+`name`: Default=None, Type: `str`  
 KIC/TIC/HD ID, will be used to download light curve if no `lc` is provided. 
 
-`lc`: Default=None, Type: `lightkurve.lightcurve.LightCurve` or `pandas.DataFrame` or tuple<br>
+`lc`: Default=None, Type: `lightkurve.lightcurve.LightCurve` or `pandas.DataFrame` or tuple  
 Light curve, if already available. If not provided, the light curve will be downloaded using the `name` parameter.
 
-`max_iterations`: Default=100, Type: `int`<br>
+`max_iterations`: Default=100, Type: `int`  
 Maximum number of iterations.
 
-`snr_threshold`: Default=5, Type: `float`<br>
+`snr_threshold`: Default=5, Type: `float`  
 Signal-to-Noise Ratio threshold.
 
-`flag_harmonics`: Default=True, Type: `bool`<br>
+`flag_harmonics`: Default=True, Type: `bool`  
 Flag harmonics of the fitted frequencies.
 
-`harmonic_tolerance`: Default=0.001, Type: `float`<br>
+`harmonic_tolerance`: Default=0.001, Type: `float`  
 Tolerance for flagging harmonics.
 
-`frequency_resolution`: Default=4/27, Type: `float`<br>
+`frequency_resolution`: Default=4/27, Type: `float`  
 Frequency resolution of the amplitude spectrum.
 
-`fbounds`: Default=None, Type: `tuple` or `list`<br>
+`fbounds`: Default=None, Type: `tuple` or `list`  
 Frequency bounds for the amplitude spectrum.
 
-`nyq_mult`: Default=1, Type: `int`<br>
+`nyq_mult`: Default=1, Type: `int`  
 Multiplier for the Nyquist frequency.
 
-`oversample_factor`: Default=5, Type: `int`<br>
+`oversample_factor`: Default=5, Type: `int`  
 Oversampling factor for the amplitude spectrum.
 
-`mode`: Default='amplitude', Type: `str`<br>
+`mode`: Default='amplitude', Type: `str`  
 Mode of the spectrum. Can be 'amplitude' or 'power'.
 
 ## Available methods
