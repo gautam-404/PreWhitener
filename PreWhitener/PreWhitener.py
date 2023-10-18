@@ -113,7 +113,7 @@ class PreWhitener:
                 raise ValueError('lc must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
                                 Or provide lightkurve searchable ID as name (e.g. TIC, HD, KIC)')
             
-        self.fbounds = fbounds if fbounds is not None else (0, self.nyquist_frequency() if self.nyquist_frequency() < 200 else 90)
+        self.fbounds = fbounds if fbounds is not None else (0, 72 if self.nyquist_frequency() < 200 else 90)
         
         self.data_iter = copy.deepcopy(self.data)
         self.max_iterations = max_iterations
