@@ -51,9 +51,9 @@ class PreWhitener:
             if name is not None:
                 if not self.get_lightcurve():
                     raise ValueError(f'No lightkurve data found for {self.name}.\n\
-                                     Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lk`')
+                                     Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lc`')
             else: 
-                raise ValueError('Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lk`')
+                raise ValueError('Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lc`')
         else:
             if isinstance(lc, lc.LightCurve):
                 self.t, self.data = lc.time.value, lc.flux.value
@@ -62,7 +62,7 @@ class PreWhitener:
             elif isinstance(lc, tuple):
                 self.t, self.data = lc[0], lc[1]
             else:
-                raise ValueError('lk must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
+                raise ValueError('lc must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
                                 Or provide lightkurve searchable ID as name (e.g. TIC, HD, KIC)')
         
         self.data_iter = copy.deepcopy(self.data)
