@@ -78,7 +78,6 @@ class PreWhitener:
 
         self.pg_og = Periodogram(self.t, self.data, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, mode=mode)
         self.pg_iter = copy.deepcopy(self.pg_og)
-        self.noise_level = np.median(self.pg_og.amps)*self.snr_threshold if self.mode == 'amplitude' else np.median(self.pg_og.powers)*self.snr_threshold
 
         self.iteration = 0
         self.stop_iteration = False
@@ -118,6 +117,11 @@ class PreWhitener:
             self.t, self.data = lc.time.value, lc.flux.value
             return True
 
+    def noise_level(self):
+        '''
+        Calculate the noise level of the light curve
+        '''
+        return np.median(self.pg_og.amps)*self.snr_threshold if self.mode == 'amplitude' else np.median(self.pg_og.powers)*self.snr_threshold
 
     def iterate(self):
         '''
@@ -149,7 +153,7 @@ class PreWhitener:
             freq = freqs_i[np.argmax(y_i)]
 
             ### SNR stopping condition ###
-            if y_max < self.noise_level:
+            if y_max < self.noise_level():
                 print('SNR threshold reached')
                 self.stop_iteration = True
                 return
