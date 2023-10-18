@@ -5,27 +5,46 @@ Install with `pip install git+https://github.com/gautam-404/PreWhitener.git`
 ## Usage
 
 ```python
-from prewhitener import PreWhitener
+from PreWhitener import PreWhitener
 
 # Create a PreWhitener object by specifying the KIC/TIC/HD ID
-pw = PW.PreWhitener(name='HDxxxxx')
+pw = PreWhitener(name='HDxxxxx')
 pw.auto()
 ```
 
 ## Available parameters
-```python
-PW.PreWhitener(name=None, ## KIC/TIC/HD ID, will be used to download light curve if no `lc`` is provided. Type: `str`
-                lc=None, ## Light curve, if already available. Type: `lightkurve.lightcurve.LightCurve` or `pandas.DataFrame` or tuple
-                max_iterations=100,  ## Maximum number of iterations. Type: `int`
-                snr_threshold=5,    ## Signal-to-Noise Ratio threshold. Type: `float`
-                flag_harmonics=True,    ## Flag harmonics of the fitted frequencies. Type: `bool`
-                harmonic_tolerance=0.001,   ## Tolerance for flagging harmonics. Type: `float`
-                frequency_resolution=4/27,  ## Frequency resolution of the amplitude spectrum. Type: `float`
-                fbounds=None,   ## Frequency bounds for the amplitude spectrum. Type: `tuple` or `list`
-                nyq_mult=1,    ## Multiplier for the Nyquist frequency. Type: `int`
-                oversample_factor=5,    ## Oversampling factor for the amplitude spectrum. Type: `int`
-                mode='amplitude')   ## Mode of the spectrum. Can be 'amplitude' or 'power'. Type: `str`
-```
+`name`: Default=None, Type: `str`
+KIC/TIC/HD ID, will be used to download light curve if no `lc`` is provided. 
+
+`lc`: Default=None, Type: `lightkurve.lightcurve.LightCurve` or `pandas.DataFrame` or tuple
+Light curve, if already available. If not provided, the light curve will be downloaded using the `name` parameter.
+
+`max_iterations`: Default=100, Type: `int`
+Maximum number of iterations.
+
+`snr_threshold`: Default=5, Type: `float`
+Signal-to-Noise Ratio threshold.
+
+`flag_harmonics`: Default=True, Type: `bool`
+Flag harmonics of the fitted frequencies.
+
+`harmonic_tolerance`: Default=0.001, Type: `float`
+Tolerance for flagging harmonics.
+
+`frequency_resolution`: Default=4/27, Type: `float`
+Frequency resolution of the amplitude spectrum.
+
+`fbounds`: Default=None, Type: `tuple` or `list`
+Frequency bounds for the amplitude spectrum.
+
+`nyq_mult`: Default=1, Type: `int`
+Multiplier for the Nyquist frequency.
+
+`oversample_factor`: Default=5, Type: `int`
+Oversampling factor for the amplitude spectrum.
+
+`mode`: Default='amplitude', Type: `str`
+Mode of the spectrum. Can be 'amplitude' or 'power'.
 
 ## Available methods
 ```python
