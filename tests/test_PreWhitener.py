@@ -1,4 +1,5 @@
 import unittest
+import pandas as pd
 import numpy as np
 import lightkurve as lk
 from PreWhitener import PreWhitener
@@ -75,7 +76,7 @@ class TestPreWhitener(unittest.TestCase):
 
     def test_get_lightcurve(self):
         # Test getting lightkurve data with valid name
-        pw = PreWhitener(name='TIC 123456')
+        pw = PreWhitener(name='TIC 7903477')
         self.assertTrue(pw.get_lightcurve())
 
         # Test getting lightkurve data with invalid name
@@ -93,3 +94,6 @@ class TestPreWhitener(unittest.TestCase):
         self.assertAlmostEqual(pw.peak_freqs[0], 0.5, places=1)
         self.assertAlmostEqual(pw.peak_freqs[1], 1.5, places=1)
         self.assertAlmostEqual(pw.peak_freqs[2], 2.5, places=1)
+
+if __name__ == '__main__':
+    unittest.main()

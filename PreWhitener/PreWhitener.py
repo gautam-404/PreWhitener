@@ -102,7 +102,7 @@ class PreWhitener:
             else: 
                 raise ValueError('Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lc`')
         else:
-            if isinstance(lc, lc.LightCurve):
+            if isinstance(lc, lk.LightCurve):
                 self.t, self.data = lc.time.value, lc.flux.value
             elif isinstance(lc, pd.DataFrame):
                 self.t, self.data = lc['time'].values, lc['flux'].values
