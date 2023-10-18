@@ -10,11 +10,56 @@ from astropy.timeseries import LombScargle
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import inspect
 
 class PreWhitener:
     '''
     The main class for conduction pre-whitening analysis
+
+    Attributes
+    ----------
+    name : str
+        Name of the star. If lightkurve searchable (e.g. TIC, HD, KIC), will download the light curve.
+    lc : lightkurve.LightCurve or pandas.DataFrame or tuple
+        If lightkurve.LightCurve, will use the time and flux attributes
+        If pandas.DataFrame, will use the time and flux columns
+        If tuple, will use the first and second elements as time and flux
+    max_iterations : int
+        Maximum number of iterations to perform
+    snr_threshold : float
+        Signal-to-noise threshold for stopping iterations
+    flag_harmonics : bool
+        Flag harmonics of detected frequencies
+    harmonic_tolerance : float
+        Tolerance for flagging harmonics
+    frequency_resolution : float
+        Frequency resolution of the periodogram
+    fbounds : tuple
+        (fmin, fmax) frequency bounds
+    nyq_mult : float
+        Multiple of the Nyquist frequency to use as the maximum frequency
+    oversample_factor : float
+        Oversample factor for the frequency grid
+    mode : str
+        Mode of the periodogram ('amplitude' or 'power')
+    data_iter : array_like
+        Copy of the original data for iterative pre-whitening
+    pg_og : lightkurve.periodogram.Periodogram
+        Original periodogram object
+    pg_iter : lightkurve.periodogram.Periodogram
+        Copy of the original periodogram object for iterative pre-whitening
+    iteration : int
+        Current iteration number
+    stop_iteration : bool
+        Flag to stop iterations
+    peak_freqs : list
+        List of detected peak frequencies
+    peak_amps : list
+        List of amplitudes of detected peak frequencies
+    f_container : array_like
+        Significant peak frequencies and amplitudes in a pandas.DataFrame
     '''
+
     def __init__(self, name=None, lc=None, max_iterations=100, snr_threshold=5,
                 flag_harmonics=True, harmonic_tolerance=0.001, frequency_resolution=4/27, 
                 fbounds=None, nyq_mult=1, oversample_factor=5, mode='amplitude'):
@@ -45,6 +90,8 @@ class PreWhitener:
             Multiple of the Nyquist frequency to use as the maximum frequency
         oversample_factor : float
             Oversample factor for the frequency grid
+        mode : str
+            Mode of the periodogram ('amplitude' or 'power')
         '''
         self.name = name
         if lc is None:
@@ -83,7 +130,7 @@ class PreWhitener:
         self.stop_iteration = False
         self.peak_freqs = []
         self.peak_amps = []
-        self.freqs_amps = None
+        self.f_container = None
 
         if not os.path.exists(f'pw/{self.name}'):
             os.makedirs(f'pw/{self.name}')
@@ -187,52 +234,62 @@ class PreWhitener:
         '''
         Post pre-whitening analysis
         '''
-        self.freqs_amps = pd.DataFrame({'freq': self.peak_freqs, 'amp': self.peak_amps}).sort_values(by='freq')
+        self.f_container = pd.DataFrame({'freq': self.peak_freqs, 'amp': self.peak_amps}).sort_values(by='freq')
 
         ## Remove frequencies with amplitude less than the local SNR.
-        self.freqs_amps = self.remove_based_on_local_snr(self.freqs_amps, resolution=3)
+        self.f_container = self.remove_based_on_local_snr(self.f_container, resolution=3)
 
         ## Remove overlapping or very nearby peaks, keep the highest amplitude one
-        self.freqs_amps = self.remove_overlapping_freqs(self.freqs_amps, nearby_tolerance=self.frequency_resolution)
+        self.f_container = self.remove_overlapping_freqs(self.f_container, nearby_tolerance=self.frequency_resolution)
                 
         if self.flag_harmonics:
-            self.freqs_amps = self.harmonics_check(self.freqs_amps, harmonic_tolerance=self.harmonic_tolerance)
+            self.f_container = self.harmonics_check(self.f_container, harmonic_tolerance=self.harmonic_tolerance)
         
         if save:
-            self.freqs_amps.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
+            self.f_container.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
 
         if make_plot:
             self.post_pw_plot(save=save)
 
-    def post_pw_plot(self, save=True):
+    def post_pw_plot(self, ax=None, save=True, **kwargs):
         '''
         Post pre-whitening plot
 
         Parameters
         ----------
+        ax : matplotlib.axes._axes.Axes
         save : bool
             If True, save the plot
+        **kwargs : dict
+            Keyword arguments for matplotlib.pyplot.plot and matplotlib.pyplot.scatter bunched together
 
         Returns
         -------
-        fig : matplotlib.figure.Figure
-        ax : matplotlib.axes._subplots.AxesSubplot
+        ax : matplotlib.axes._axes.Axes
         '''
-        fig, ax = plt.subplots(figsize=(10, 5))
-        if isinstance(self.freqs_amps, pd.DataFrame):
+        ax = ax if ax is not None else plt.gca()
+
+        ## Separate scatter and plot kwargs ##
+        scatter_args = list(inspect.signature(plt.scatter).parameters)
+        scatter_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in scatter_args}
+        plot_args = list(inspect.signature(plt.plot).parameters)
+        plot_dict = {k: kwargs.pop(k) for k in dict(kwargs) if k in plot_args}
+
+
+        if isinstance(self.f_container, pd.DataFrame):
             if self.mode == 'amplitude':
-                ax.plot(self.pg_og.freqs, self.pg_og.amps*1000)
-                ax.scatter(self.freqs_amps['freq'], self.freqs_amps['amp']*1000, marker='x', color='maroon', s=10, linewidths=1, zorder=2)
+                ax.plot(self.pg_og.freqs, self.pg_og.amps*1000, **plot_dict)
+                ax.scatter(self.f_container['freq'], self.f_container['amp']*1000, marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_dict)
                 ax.set_ylabel("Amplitude (ppt)")
             if self.mode == 'power':
-                ax.plot(self.pg_og.freqs, self.pg_og.powers)
-                ax.scatter(self.freqs_amps['freq'], self.freqs_amps['amp'], marker='x', color='maroon', s=10, linewidths=1, zorder=2)
+                ax.plot(self.pg_og.freqs, self.pg_og.powers, **plot_dict)
+                ax.scatter(self.f_container['freq'], self.f_container['amp'], marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_dict)
                 ax.set_ylabel("Power (ppt)")
             ax.set_xlabel("Frequency (1/day)")
             ax.set_xlim(self.fmin, self.fmax)
             if save:
                 plt.savefig(f'pw/{self.name}/prewhitening.png', dpi=300)
-            return fig, ax
+            return ax
         else:
             raise ValueError('No frequencies found. Try running post_pw() first')
 
