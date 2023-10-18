@@ -136,6 +136,8 @@ class PreWhitener:
         powers : array_like
             Power spectrum
         '''
+        if self.iteration == 0:
+            self.pg_iter = copy.deepcopy(self.pg_og)
         self.pg_iter.amplitude_power_spectrum(self.t, self.data_iter)
         freqs_i = self.pg_iter.freqs
         if self.mode == 'amplitude':
