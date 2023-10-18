@@ -15,7 +15,7 @@ class PreWhitener:
     '''
     The main class for conduction pre-whitening analysis
     '''
-    def __init__(self, name=None, lk=None, max_iterations=100, snr_threshold=5,
+    def __init__(self, name=None, lc=None, max_iterations=100, snr_threshold=5,
                 flag_harmonics=True, harmonic_tolerance=0.001, frequency_resolution=4/27, 
                 fbounds=None, nyq_mult=1, oversample_factor=5, mode='amplitude'):
         '''
@@ -25,7 +25,7 @@ class PreWhitener:
         ----------
         name : str
             Name of the star. If lightkurve searchable (e.g. TIC, HD, KIC), will download the light curve.
-        lk : lightkurve.LightCurve or pandas.DataFrame or tuple
+        lc : lightkurve.LightCurve or pandas.DataFrame or tuple
             If lightkurve.LightCurve, will use the time and flux attributes
             If pandas.DataFrame, will use the time and flux columns
             If tuple, will use the first and second elements as time and flux
@@ -47,18 +47,18 @@ class PreWhitener:
             Oversample factor for the frequency grid
         '''
         self.name = name
-        if lk is None:
+        if lc is None:
             if name is not None:
                 if not self.get_lightcurve():
                     raise ValueError(f'No lightkurve data found for {self.name}.\n\
                                      Provide a lightkurve searchable ID as `name` (e.g. TIC, HD, KIC) or provide a lightkurve.LightCurve or pandas.DataFrame or tuple as `lk`')
         else:
-            if isinstance(lk, lk.LightCurve):
-                self.t, self.data = lk.time.value, lk.flux.value
-            elif isinstance(lk, pd.DataFrame):
-                self.t, self.data = lk['time'].values, lk['flux'].values
-            elif isinstance(lk, tuple):
-                self.t, self.data = lk[0], lk[1]
+            if isinstance(lc, lc.LightCurve):
+                self.t, self.data = lc.time.value, lc.flux.value
+            elif isinstance(lc, pd.DataFrame):
+                self.t, self.data = lc['time'].values, lc['flux'].values
+            elif isinstance(lc, tuple):
+                self.t, self.data = lc[0], lc[1]
             else:
                 raise ValueError('lk must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
                                   Or provide lightkurve searchable ID as name (e.g. TIC, HD, KIC)')
@@ -135,7 +135,7 @@ class PreWhitener:
         powers : array_like
             Power spectrum
         '''
-        self.pg_iter.amplitude_spectrum(self.t, self.data_iter)
+        self.pg_iter.amplitude_power_spectrum(self.t, self.data_iter)
         freqs_i = self.pg_iter.freqs
         if self.mode == 'amplitude':
             y_i = self.pg_iter.amps
@@ -168,7 +168,7 @@ class PreWhitener:
             self.data_iter -= self.sinusoidal_model(self.t, *params)
             self.iteration += 1
 
-    def auto(self, make_plot=True):
+    def auto(self, make_plot=True, save=True):
         '''
         Auto iterator for pre-whitening
         '''
@@ -177,11 +177,11 @@ class PreWhitener:
             if self.stop_iteration:
                 break
         
-        self.post_pw(make_plot=make_plot)
+        self.post_pw(make_plot=make_plot, save=save)
         print(f'Pre-whitening complete after {self.iteration} iterations')
 
 
-    def post_pw(self, make_plot=True):
+    def post_pw(self, make_plot=True, save=True):
         '''
         Post pre-whitening analysis
         '''
@@ -196,7 +196,9 @@ class PreWhitener:
         if self.flag_harmonics:
             self.freqs_amps = self.harmonics_check(self.freqs_amps, harmonic_tolerance=self.harmonic_tolerance)
         
-        self.freqs_amps.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
+        if save:
+            self.freqs_amps.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
+
         if make_plot:
             self.post_pw_plot()
 
@@ -331,9 +333,9 @@ class Periodogram:
         self.nyq_mult = nyq_mult
         self.oversample_factor = oversample_factor
         self.mode = mode
-        self.amplitude_spectrum(t, data)
+        self.amplitude_power_spectrum(t, data)
 
-    def amplitude_spectrum(self, t, data):
+    def amplitude_power_spectrum(self, t, data):
         '''
         Calculate the amplitude spectrum of the time series y(t)
         
