@@ -263,7 +263,7 @@ class PreWhitener:
             raise ValueError('No frequencies found. Try running post_pw() first')
 
     # Sinusoidal function to fit the peaks
-    def sinusoidal_model(self, t: np.array, A: float, omega: float, phi: float, C: float) -> np.array:
+    def sinusoidal_model(self, t: np.ndarray, A: float, omega: float, phi: float, C: float) -> np.ndarray:
         """
         Sinusoidal model
         """

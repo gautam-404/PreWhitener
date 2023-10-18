@@ -7,15 +7,15 @@ class Periodogram:
     '''
     Periodogram object for storing and operating on Lomb-Scargle periodograms
     '''
-    t: np.array
+    t: np.ndarray
     '''Time series'''
-    data: np.array
+    data: np.ndarray
     '''Flux or magnitude time series'''
-    freqs: np.array
+    freqs: np.ndarray
     '''Frequency grid for the periodogram'''
-    amps: np.array
+    amps: np.ndarray
     '''Amplitude spectrum of the time series. Only one of amps or powers will be populated based on the mode'''
-    powers: np.array
+    powers: np.ndarray
     '''Power spectrum of the time series. Only one of amps or powers will be populated based on the mode'''
     fbounds: tuple
     '''(fmin, fmax) frequency bounds'''
@@ -26,7 +26,7 @@ class Periodogram:
     mode: str
     """'amplitude' or 'power'"""
 
-    def __init__(self, t: np.array, data: np.array, fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, mode: str = 'amplitude'):
+    def __init__(self, t: np.ndarray, data: np.ndarray, fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, mode: str = 'amplitude'):
         '''
         Constructor for Periodogram object
         '''
@@ -39,7 +39,7 @@ class Periodogram:
         self.mode = mode
         self.amplitude_power_spectrum(t, data)
 
-    def amplitude_power_spectrum(self, t: np.array, data: np.array):
+    def amplitude_power_spectrum(self, t: np.ndarray, data: np.ndarray):
         '''
         Calculate the amplitude spectrum of the time series y(t)
         
