@@ -148,7 +148,6 @@ class PreWhitener:
             y_max = np.max(y_i)
             freq = freqs_i[np.argmax(y_i)]
 
-            print(y_max, self.noise_level)
             ### SNR stopping condition ###
             if y_max < self.noise_level:
                 print('SNR threshold reached')
