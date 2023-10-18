@@ -127,11 +127,6 @@ class PreWhitener:
         '''
         Perform a single iteration of pre-whitening
 
-        Parameters
-        ----------
-        iteration : int
-            Iteration number
-
         Returns
         -------
         freqs : array_like
