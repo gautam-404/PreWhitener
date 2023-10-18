@@ -201,9 +201,9 @@ class PreWhitener:
             self.freqs_amps.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
 
         if make_plot:
-            self.post_pw_plot()
+            self.post_pw_plot(save=save)
 
-    def post_pw_plot(self):
+    def post_pw_plot(self, save=True):
         fig, ax = plt.subplots(figsize=(10, 5))
         if self.mode == 'amplitude':
             ax.plot(self.pg_og.freqs, self.pg_og.amps*1000)
@@ -215,7 +215,10 @@ class PreWhitener:
             ax.set_ylabel("Power (ppt)")
         ax.set_xlabel("Frequency (1/day)")
         ax.set_xlim(self.fmin, self.fmax)
-        plt.savefig(f'pw/{self.name}/prewhitening.png', dpi=300)
+        if save:
+            plt.savefig(f'pw/{self.name}/prewhitening.png', dpi=300)
+        else:
+            return fig, ax
 
     # Sinusoidal function to fit the peaks
     def sinusoidal_model(self, t, A, omega, phi, C):
