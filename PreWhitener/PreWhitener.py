@@ -17,6 +17,7 @@ class PreWhitener:
     """
     The main class for conducting pre-whitening analysis.
     """
+    # Attributes 
     name : str
     """Name of the star. If lightkurve searchable (e.g. TIC, HD, KIC), will download the light curve."""
     lc : (lk.LightCurve or pd.DataFrame or tuple)
@@ -37,8 +38,8 @@ class PreWhitener:
     """Multiple of the Nyquist frequency to use as the maximum frequency."""
     oversample_factor : int
     """Oversample factor for the frequency grid."""
-    mode : str
-    """Mode of the periodogram ('amplitude' or 'power')."""
+    normalization : str
+    """Mode of the periodogram ('amplitude' or 'psd')."""
     t : np.ndarray
     """1D array time series."""
     data : np.ndarray
@@ -57,14 +58,32 @@ class PreWhitener:
     """List of detected peak frequencies."""
     peak_amps : list
     """List of amplitudes of detected peak frequencies."""
-    f_container : pd.DataFrame
+    freq_container : pd.DataFrame
     """Significant peak frequencies and amplitudes in a pandas.DataFrame."""
 
-    def __init__(self, name: str = None, lc: (lk.LightCurve or pd.DataFrame or tuple)=None, max_iterations: int = 100, snr_threshold: float = 5,
-                flag_harmonics: bool = True, harmonic_tolerance: float = 0.001, frequency_resolution: float = 4/27, 
-                fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, mode: str = 'amplitude'):
+    def __init__(self, name: str = None, lc: (lk.LightCurve or pd.DataFrame or tuple)=None, max_iterations: int = 100, snr_threshold: float = 5, 
+                fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude'):
         """
         Constructor for PreWhitener object.
+
+        Parameters
+        ----------
+        name : str
+            Name of the star. If lightkurve searchable (e.g. TIC, HD, KIC), will download the light curve.
+        lc : (lightkurve.LightCurve or pandas.DataFrame or tuple)
+            If lightkurve.LightCurve, will use the time and flux attributes. If pandas.DataFrame, will use the time and flux columns. If tuple, will use the first and second elements as time and flux.
+        max_iterations : int
+            Maximum number of iterations to perform.
+        snr_threshold : float
+            Signal-to-noise threshold for stopping iterations.
+        fbounds : tuple
+            (fmin, fmax) frequency bounds.
+        nyq_mult : int
+            Multiple of the Nyquist frequency to use as the maximum frequency.
+        oversample_factor : int
+            Oversample factor for the frequency grid.
+        normalization : str
+            Mode of the periodogram ('amplitude' or 'psd').
         """
         self.name = name
         if lc is None:
@@ -78,36 +97,39 @@ class PreWhitener:
             # self.fbounds = (0, 72) if fbounds is None else fbounds
             if isinstance(lc, lk.LightCurve):
                 self.t, self.data = lc.time.value, lc.flux.value
+                self.lc = lc
+                self.time_unit = lc.time.unit
+                self.flux_unit = lc.flux.unit
             elif isinstance(lc, pd.DataFrame):
                 self.t, self.data = lc['time'].values, lc['flux'].values
+                self.lc = lk.LightCurve(time=self.t, flux=self.data)
             elif isinstance(lc, tuple):
                 self.t, self.data = lc[0], lc[1]
+                self.lc = lk.LightCurve(time=self.t, flux=self.data)
             else:
                 raise ValueError('lc must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
                                 Or provide lightkurve searchable ID as name (e.g. TIC, HD, KIC)')
         
-        self.lc = lk.LightCurve(time=self.t, flux=self.data)
         self.fbounds = fbounds if fbounds is not None else (0, 72 if self.nyquist_frequency() < 200 else 90)
-        
-        self.data_iter = copy.deepcopy(self.data)
+
+        self.data_iter = copy.deepcopy(self.data - np.median(self.data))
         self.max_iterations = max_iterations
         self.snr_threshold = snr_threshold
-        self.flag_harmonics = flag_harmonics
-        self.harmonic_tolerance = harmonic_tolerance
-        self.frequency_resolution = frequency_resolution
         self.fmin, self.fmax = self.fbounds if self.fbounds is not None else (self.fmin, self.fmax)
         self.nyq_mult = nyq_mult
         self.oversample_factor = oversample_factor
-        self.mode = mode
+        self.normalization = normalization if normalization in ['amplitude', 'psd'] else 'amplitude' # default to amplitude mode
 
-        self.pg = Periodogram(self.t, self.data, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, mode=mode)
+        self.pg = Periodogram(self.t, self.data, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, normalization=normalization)
         self.pg_iter = copy.deepcopy(self.pg)
+        self.noise_level = np.median(self.pg.amps)*self.snr_threshold if self.normalization == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
 
         self.iteration = 0
         self.stop_iteration = False
         self.peak_freqs = []
         self.peak_amps = []
-        self.f_container = None
+        self.peak_powers = []
+        self.freq_container = None
 
         if not os.path.exists(f'pw/{self.name}'):
             os.makedirs(f'pw/{self.name}')
@@ -146,11 +168,11 @@ class PreWhitener:
         return 1/(2*np.median(np.diff(self.t)))
 
 
-    def noise_level(self) -> float:
-        """
-        Calculate the noise level of the light curve
-        """
-        return np.median(self.pg.amps)*self.snr_threshold if self.mode == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
+    # def noise_level(self) -> float:
+    #     """
+    #     Calculate the noise level of the light curve
+    #     """
+    #     return np.median(self.pg.amps)*self.snr_threshold if self.normalization == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
 
     def iterate(self) -> None:
         """
@@ -160,9 +182,9 @@ class PreWhitener:
             self.pg_iter = copy.deepcopy(self.pg)
         self.pg_iter.amplitude_power_spectrum(self.t, self.data_iter)
         freqs_i = self.pg_iter.freqs
-        if self.mode == 'amplitude':
+        if self.normalization == 'amplitude':
             y_i = self.pg_iter.amps
-        elif self.mode == 'power':
+        elif self.normalization == 'psd':
             y_i = self.pg_iter.powers
 
         if self.iteration < self.max_iterations:
@@ -170,13 +192,13 @@ class PreWhitener:
             freq = freqs_i[np.argmax(y_i)]
 
             ### SNR stopping condition ###
-            if y_max < self.noise_level():
+            if y_max < self.noise_level:
                 print('SNR threshold reached')
                 self.stop_iteration = True
                 return
         
             omega = 2 * np.pi * freq
-            p0 = [y_max, omega, 0.5, 0.5]
+            p0 = [y_max, omega, 0.5]
 
             params, pcov = curve_fit(self.sinusoidal_model, self.t, self.data_iter, p0=p0)
             ## Negative amp corrections. Flip sign, add pi to phase
@@ -185,41 +207,105 @@ class PreWhitener:
                 params[2] += np.pi
             
             self.peak_freqs.append(params[1]/(2*np.pi))
-            # self.peak_amps.append(params[0])
-            self.peak_amps.append(y_max)
+            if self.normalization == 'amplitude':
+                self.peak_amps.append(params[0])
+            elif self.normalization == 'psd':
+                self.peak_powers.append(params[0])
             self.data_iter -= self.sinusoidal_model(self.t, *params)
             self.iteration += 1
 
-    def auto(self, make_plot: bool = True, save: bool = True) -> None:
+    def auto(self, make_plot: bool = True, save: bool = True, remove_overlapping: bool = True, remove_local_snr: bool = False, local_snr_resolution: float = 3,
+                flag_harmonics: bool = True, harmonic_tolerance: float = 0.001, frequency_resolution: float = 4/27) -> None:
         """
         Auto iterator for pre-whitening
+
+        Parameters
+        ----------
+        make_plot : bool, optional, default: True
+            If True, make a plot of the pre-whitened light curve
+        save : bool, optional, default: True
+            If True, save the pre-whitened light curve
+        remove_overlapping : bool, optional, default: True
+            If True, remove overlapping or very nearby peaks, keeps the highest amplitude one
+        remove_local_snr : bool, optional, default: True
+            If True, remove frequencies with amplitude less than the local SNR. 
+            Local SNR is defined as the median amplitude of frequencies within 3 cycles/day of the peak frequency.
+        local_snr_resolution : float, optional, default: 3
+            Resolution for the local SNR. The local SNR is defined as the median amplitude of frequencies within `local_snr_resolution` cycles/day of the peak frequency.
+        flag_harmonics : bool, optional, default: True
+            If True, flag harmonics of detected frequencies
+        harmonic_tolerance : float, optional, default: 0.001
+            Tolerance for flagging harmonics
+        frequency_resolution : float, optional, default: 4/27
+            Frequency resolution of the periodogram
         """
         for i in tqdm(range(self.max_iterations), desc='Pre-whitening'):
             self.iterate()
             if self.stop_iteration:
                 break
         
-        self.post_pw(make_plot=make_plot, save=save)
+        self.post_pw(make_plot=make_plot, save=save, remove_overlapping=remove_overlapping, remove_local_snr=remove_local_snr, local_snr_resolution=local_snr_resolution,
+                    flag_harmonics=flag_harmonics, harmonic_tolerance=harmonic_tolerance, frequency_resolution=frequency_resolution)
         print(f'Pre-whitening complete after {self.iteration} iterations')
 
+    def iniy_freq_container(self) -> pd.DataFrame:
+        """
+        Convert the pre-whitened light curve to a pandas.DataFrame
+        """
+        if self.normalization == 'amplitude':
+            df = pd.DataFrame({'freq': self.peak_freqs, 'amp': self.peak_amps}).sort_values(by='freq', ascending=True)
+        elif self.normalization == 'psd':
+            df = pd.DataFrame({'freq': self.peak_freqs, 'pow': self.peak_powers}).sort_values(by='freq', ascending=True)
+        df = df.reset_index(drop=True)
+        df['label'] = [f'F{i}' for i in range(len(df))]
+        return df
 
-    def post_pw(self, make_plot: bool = True, save: bool = True) -> None:
+    def post_pw(self, make_plot: bool = True, save: bool = True, remove_overlapping: bool = True, remove_local_snr: bool = True, local_snr_resolution: float = 3, 
+                flag_harmonics: bool = True, harmonic_tolerance: float = 0.001, frequency_resolution: float = 4/27) -> None:
         """
         Post pre-whitening analysis
+
+        Parameters
+        ----------
+        make_plot : bool, optional, default: True
+            If True, make a plot of the pre-whitened light curve
+        save : bool, optional, default: True
+            If True, save the pre-whitened light curve
+        remove_overlapping : bool, optional, default: True
+            If True, remove overlapping or very nearby peaks, keeps the highest amplitude one
+        remove_local_snr : bool, optional, default: True
+            If True, remove frequencies with amplitude less than the local SNR.
+            Local SNR is defined as the median amplitude of frequencies within 3 cycles/day of the peak frequency.
+        local_snr_resolution : float, optional, default: 3
+            Resolution for the local SNR. The local SNR is defined as the median amplitude of frequencies within `local_snr_resolution` cycles/day of the peak frequency.
+        flag_harmonics : bool, optional, default: True
+            If True, flag harmonics of detected frequencies
+        harmonic_tolerance : float, optional, default: 0.001
+            Tolerance for flagging harmonics
+        frequency_resolution : float, optional, default: 4/27
+            Frequency resolution of the periodogram
         """
-        self.f_container = pd.DataFrame({'freq': self.peak_freqs, 'amp': self.peak_amps}).sort_values(by='freq')
+        self.flag_harmonics = flag_harmonics
+        self.harmonic_tolerance = harmonic_tolerance
+        self.frequency_resolution = frequency_resolution
+        self.remove_local_snr = remove_local_snr
+        self.remove_overlapping = remove_overlapping
 
-        ## Remove frequencies with amplitude less than the local SNR.
-        self.f_container = self.remove_based_on_local_snr(self.f_container, resolution=3)
+        self.freq_container = self.iniy_freq_container()
 
-        ## Remove overlapping or very nearby peaks, keep the highest amplitude one
-        self.f_container = self.remove_overlapping_freqs(self.f_container, nearby_tolerance=self.frequency_resolution)
+        if self.remove_local_snr:
+            ## Remove frequencies with amplitude less than the local SNR.
+            self.freq_container = self.remove_based_on_local_snr(self.freq_container, resolution=local_snr_resolution)
+
+        if self.remove_overlapping:
+            ## Remove overlapping or very nearby peaks, keep the highest amplitude one
+            self.freq_container = self.remove_overlapping_freqs(self.freq_container, nearby_tolerance=self.frequency_resolution)
                 
         if self.flag_harmonics:
-            self.f_container = self.harmonics_check(self.f_container, harmonic_tolerance=self.harmonic_tolerance)
+            self.freq_container = self.harmonics_check(self.freq_container, harmonic_tolerance=self.harmonic_tolerance)
         
         if save:
-            self.f_container.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
+            self.freq_container.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
 
         if make_plot:
             self.post_pw_plot(save=save)
@@ -245,15 +331,15 @@ class PreWhitener:
         """
         ax = ax if ax is not None else plt.gca()
         
-        if isinstance(self.f_container, pd.DataFrame):
-            if self.mode == 'amplitude':
-                ax.plot(self.pg.freqs, self.pg.amps*1000, **plot_kwargs)
-                ax.scatter(self.f_container['freq'], self.f_container['amp']*1000, marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_kwargs)
-                ax.set_ylabel("Amplitude (ppt)")
-            if self.mode == 'power':
+        if isinstance(self.freq_container, pd.DataFrame):
+            if self.normalization == 'amplitude':
+                ax.plot(self.pg.freqs, self.pg.amps, **plot_kwargs)
+                ax.scatter(self.freq_container['freq'], self.freq_container['amp'], marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_kwargs)
+                ax.set_ylabel("Amplitude")
+            if self.normalization == 'psd':
                 ax.plot(self.pg.freqs, self.pg.powers, **plot_kwargs)
-                ax.scatter(self.f_container['freq'], self.f_container['amp'], marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_kwargs)
-                ax.set_ylabel("Power (ppt)")
+                ax.scatter(self.freq_container['freq'], self.freq_container['pow'], marker='x', color='maroon', s=10, linewidths=1, zorder=2, **scatter_kwargs)
+                ax.set_ylabel("Power")
             ax.set_xlabel("Frequency (1/day)")
             ax.set_xlim(self.fmin, self.fmax)
             if save:
@@ -263,11 +349,11 @@ class PreWhitener:
             raise ValueError('No frequencies found. Try running post_pw() first')
 
     # Sinusoidal function to fit the peaks
-    def sinusoidal_model(self, t: np.ndarray, A: float, omega: float, phi: float, C: float) -> np.ndarray:
+    def sinusoidal_model(self, t: np.ndarray, A: float, omega: float, phi: float) -> np.ndarray:
         """
         Sinusoidal model
         """
-        return A * np.sin(omega * t + phi) + C
+        return A * np.sin(omega * t + phi)
 
     def harmonics_check(self, df: pd.DataFrame, harmonic_tolerance: float = 0.01) -> pd.DataFrame:
         """
@@ -313,15 +399,24 @@ class PreWhitener:
         -------
         df : pandas.DataFrame  
         """
-        df = df.sort_values(by=['freq', 'amp'], ascending=False)
+        if self.normalization == 'psd':
+            df.sort_values(by=['freq', 'pow'], ascending=False)
+        else:
+            df = df.sort_values(by=['freq', 'amp'], ascending=False)
         df = df.reset_index(drop=True)
         to_drop = []
         for i in range(len(df)-1):
             if df.iloc[i]['freq'] - df.iloc[i+1]['freq'] < nearby_tolerance:
-                if df.iloc[i]['amp'] < df.iloc[i+1]['amp']:
-                    to_drop.append(i)
-                else:
-                    to_drop.append(i+1)
+                if self.normalization == 'psd':
+                    if df.iloc[i]['pow'] < df.iloc[i+1]['pow']:
+                        to_drop.append(i)
+                    else:
+                        to_drop.append(i+1)
+                elif self.normalization == 'amplitude':
+                    if df.iloc[i]['amp'] < df.iloc[i+1]['amp']:
+                        to_drop.append(i)
+                    else:
+                        to_drop.append(i+1)
         return df.drop(index=to_drop)
 
     def remove_based_on_local_snr(self, df: pd.DataFrame, resolution: float = 3) -> pd.DataFrame:
@@ -332,22 +427,29 @@ class PreWhitener:
         ----------
         df : pandas.DataFrame  
             DataFrame with columns 'freq' and 'amp'  
-        snr_threshold : float  
-            SNR threshold  
+        resolution : float
+            Resolution for the local SNR. The local SNR is defined as the median amplitude of frequencies within `resolution` cycles/day of the peak frequency.
 
         Returns
         -------
         df : pandas.DataFrame  
             DataFrame with columns 'freq' and 'amp' with frequencies below the local SNR threshold removed  
         """
-        df = df.sort_values(by=['freq', 'amp'], ascending=False)
+        if self.normalization == 'psd':
+            df.sort_values(by=['freq', 'pow'], ascending=False)
+        else:
+            df = df.sort_values(by=['freq', 'amp'], ascending=False)
         df = df.reset_index(drop=True)
         to_drop = []
         for i in range(len(df)-1):
             freq = df.iloc[i]['freq']
-            amp = df.iloc[i]['amp']
-            local_noise = np.median(df[(df['freq'] > freq - resolution) & (df['freq'] < freq + resolution)]['amp'])
-            if amp < local_noise:
-                to_drop.append(i)
+            if self.normalization == 'psd':
+                local_noise = np.median(df[(df['freq'] > freq - resolution) & (df['freq'] < freq + resolution)]['pow'])
+                if df.iloc[i]['pow'] < local_noise:
+                    to_drop.append(i)
+            elif self.normalization == 'amplitude':
+                local_noise = np.median(df[(df['freq'] > freq - resolution) & (df['freq'] < freq + resolution)]['amp'])
+                if df.iloc[i]['amp'] < local_noise:
+                    to_drop.append(i)
         return df.drop(index=to_drop)
         

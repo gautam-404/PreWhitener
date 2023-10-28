@@ -24,21 +24,24 @@ class Periodogram:
     '''Multiple of the Nyquist frequency to use as the maximum frequency'''
     oversample_factor: int
     '''Oversample factor for the frequency grid'''
-    mode: str
-    """'amplitude' or 'power'"""
+    normalization: str
+    """'amplitude' or 'psd'"""
 
-    def __init__(self, t: np.ndarray, data: np.ndarray, fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, mode: str = 'amplitude'):
+    def __init__(self, t: np.ndarray, data: np.ndarray, fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude'):
         '''
         Constructor for Periodogram object
         '''
         self.freqs = None
         self.amps = None
         self.powers = None
+        self.t = t
+        self.data = data
         self.fbounds = fbounds
         self.nyq_mult = nyq_mult
         self.oversample_factor = oversample_factor
-        self.mode = mode
+        self.normalization = normalization
         self.amplitude_power_spectrum(t, data)
+        
 
     def amplitude_power_spectrum(self, t: np.ndarray, data: np.ndarray):
         '''
@@ -62,9 +65,9 @@ class Periodogram:
         Returns
         -------
         freqs : array_like
-            Frequency grid
+            Frequency grid (1 / day)
         amps : array_like
-            Amplitude spectrum
+            Normalized power spectrum (dimensionless unscaled)
         '''
         tmax = t.max()
         tmin = t.min()
@@ -81,11 +84,11 @@ class Periodogram:
         model = LombScargle(t, data)
         sc = model.power(freqs, method="fast", normalization="psd")
 
-        if self.mode == 'amplitude':
+        if self.normalization == 'amplitude':
             amps = np.sqrt(4./len(t)) * np.sqrt(sc)
             self.freqs = freqs
             self.amps = amps
-        elif self.mode == 'power':
+        elif self.normalization == 'power':
             powers = np.sqrt(4./len(t))**2 * sc
             self.freqs = freqs
             self.powers = powers

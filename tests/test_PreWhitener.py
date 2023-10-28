@@ -26,12 +26,12 @@ class TestPreWhitener(unittest.TestCase):
         self.assertLessEqual(pw.fmax, pw.nyquist_frequency())
         self.assertEqual(pw.nyq_mult, 1)
         self.assertEqual(pw.oversample_factor, 5)
-        self.assertEqual(pw.mode, 'amplitude')
+        self.assertEqual(pw.normalization, 'amplitude')
         self.assertEqual(pw.iteration, 0)
         self.assertEqual(pw.stop_iteration, False)
         self.assertEqual(pw.peak_freqs, [])
         self.assertEqual(pw.peak_amps, [])
-        self.assertEqual(pw.f_container, None)
+        self.assertEqual(pw.freq_container, None)
 
         # Test initialization with pandas.DataFrame
         df = pd.DataFrame({'time': np.arange(0, 10, 0.1), 'flux': np.random.randn(100)})
@@ -48,12 +48,12 @@ class TestPreWhitener(unittest.TestCase):
         self.assertEqual(pw.fmax, 1/(2*np.median(np.diff(df['time'].values))))
         self.assertEqual(pw.nyq_mult, 1)
         self.assertEqual(pw.oversample_factor, 5)
-        self.assertEqual(pw.mode, 'amplitude')
+        self.assertEqual(pw.normalization, 'amplitude')
         self.assertEqual(pw.iteration, 0)
         self.assertEqual(pw.stop_iteration, False)
         self.assertEqual(pw.peak_freqs, [])
         self.assertEqual(pw.peak_amps, [])
-        self.assertEqual(pw.f_container, None)
+        self.assertEqual(pw.freq_container, None)
 
         # Test initialization with tuple
         t = np.arange(0, 10, 0.1)
@@ -71,12 +71,12 @@ class TestPreWhitener(unittest.TestCase):
         self.assertEqual(pw.fmax, 1/(2*np.median(np.diff(t))))
         self.assertEqual(pw.nyq_mult, 1)
         self.assertEqual(pw.oversample_factor, 5)
-        self.assertEqual(pw.mode, 'amplitude')
+        self.assertEqual(pw.normalization, 'amplitude')
         self.assertEqual(pw.iteration, 0)
         self.assertEqual(pw.stop_iteration, False)
         self.assertEqual(pw.peak_freqs, [])
         self.assertEqual(pw.peak_amps, [])
-        self.assertEqual(pw.f_container, None)
+        self.assertEqual(pw.freq_container, None)
 
     def test_get_lightcurve(self):
         # Test getting lightkurve data with valid name
