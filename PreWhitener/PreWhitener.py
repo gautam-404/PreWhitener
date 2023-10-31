@@ -120,7 +120,7 @@ class PreWhitener:
         self.oversample_factor = oversample_factor
         self.normalization = normalization if normalization in ['amplitude', 'psd'] else 'amplitude' # default to amplitude mode
 
-        self.pg = Periodogram(self.t, self.data, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, normalization=normalization)
+        self.pg = Periodogram(self.lc.time.value, self.lc.flux, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, normalization=normalization)
         self.pg_iter = copy.deepcopy(self.pg)
         self.noise_level = np.median(self.pg.amps)*self.snr_threshold if self.normalization == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
 
@@ -214,6 +214,7 @@ class PreWhitener:
                 self.peak_powers.append(params[0])
             self.data_iter -= self.sinusoidal_model(self.t, *params)
             self.iteration += 1
+        self.freq_container = self.init_freq_container()
 
     def auto(self, make_plot: bool = True, save: bool = True, remove_overlapping: bool = True, remove_local_snr: bool = False, local_snr_resolution: float = 3,
                 flag_harmonics: bool = True, harmonic_tolerance: float = 0.001, frequency_resolution: float = 4/27) -> None:
@@ -249,7 +250,7 @@ class PreWhitener:
                     flag_harmonics=flag_harmonics, harmonic_tolerance=harmonic_tolerance, frequency_resolution=frequency_resolution)
         print(f'Pre-whitening complete after {self.iteration} iterations')
 
-    def iniy_freq_container(self) -> pd.DataFrame:
+    def init_freq_container(self) -> pd.DataFrame:
         """
         Convert the pre-whitened light curve to a pandas.DataFrame
         """
@@ -258,7 +259,7 @@ class PreWhitener:
         elif self.normalization == 'psd':
             df = pd.DataFrame({'freq': self.peak_freqs, 'pow': self.peak_powers}).sort_values(by='freq', ascending=True)
         df = df.reset_index(drop=True)
-        df['label'] = [f'F{i}' for i in range(len(df))]
+        df['label'] = [f'F{i+1}' for i in range(len(df))]
         return df
 
     def post_pw(self, make_plot: bool = True, save: bool = True, remove_overlapping: bool = True, remove_local_snr: bool = True, local_snr_resolution: float = 3, 
@@ -292,7 +293,7 @@ class PreWhitener:
         self.remove_local_snr = remove_local_snr
         self.remove_overlapping = remove_overlapping
 
-        self.freq_container = self.iniy_freq_container()
+        self.freq_container = self.ini_freq_container()
 
         if self.remove_local_snr:
             ## Remove frequencies with amplitude less than the local SNR.
