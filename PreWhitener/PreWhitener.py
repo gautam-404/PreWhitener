@@ -158,6 +158,7 @@ class PreWhitener:
             lc = lc.remove_nans().remove_outliers()
 
             # Extract time and flux from the light curve
+            self.lc = lc
             self.t, self.data = lc.time.value, lc.flux.value
             return True
    
