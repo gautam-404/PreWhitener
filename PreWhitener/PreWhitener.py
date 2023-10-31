@@ -465,3 +465,8 @@ class PreWhitener:
                     to_drop.append(i)
         return df.drop(index=to_drop)
     
+    def __repr__(self):
+        if self.name is not None:
+            return f"PreWhitener(name='{self.name}')"
+        else:
+            return f'PreWhitener(lc=({self.t}, {self.data}))'
