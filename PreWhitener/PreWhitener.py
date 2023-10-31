@@ -96,16 +96,11 @@ class PreWhitener:
         else:
             # self.fbounds = (0, 72) if fbounds is None else fbounds
             if isinstance(lc, lk.LightCurve):
-                self.t, self.data = lc.time.value, lc.flux.value
                 self.lc = lc
-                self.time_unit = lc.time.unit
-                self.flux_unit = lc.flux.unit
             elif isinstance(lc, pd.DataFrame):
-                self.t, self.data = lc['time'].values, lc['flux'].values
-                self.lc = lk.LightCurve(time=self.t, flux=self.data)
+                self.lc = lk.LightCurve(time=lc['time'].values, flux=lc['flux'].values)
             elif isinstance(lc, tuple):
-                self.t, self.data = lc[0], lc[1]
-                self.lc = lk.LightCurve(time=self.t, flux=self.data)
+                self.lc = lk.LightCurve(time=lc[0], flux=lc[1])
             else:
                 raise ValueError('lc must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
                                 Or provide lightkurve searchable ID as name (e.g. TIC, HD, KIC)')
@@ -159,8 +154,23 @@ class PreWhitener:
 
             # Extract time and flux from the light curve
             self.lc = lc
-            self.t, self.data = lc.time.value, lc.flux.value
             return True
+    
+    @property
+    def t(self):
+        return self.lc.time.value
+
+    @t.setter
+    def t(self):
+        raise ValueError('Cannot set time directly. Use lc instead.')
+    
+    @property
+    def data(self):
+        return self.lc.flux.value
+    
+    @data.setter
+    def data(self):
+        raise ValueError('Cannot set data directly. Use lc instead.')
    
     def nyquist_frequency(self) -> float:
         """
@@ -454,4 +464,4 @@ class PreWhitener:
                 if df.iloc[i]['amp'] < local_noise:
                     to_drop.append(i)
         return df.drop(index=to_drop)
-        
+    
