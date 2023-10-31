@@ -287,13 +287,13 @@ class PreWhitener:
         frequency_resolution : float, optional, default: 4/27
             Frequency resolution of the periodogram
         """
+        if self.freq_container is None:
+            raise ValueError('No frequencies found. Try running auto()/interate() first')
         self.flag_harmonics = flag_harmonics
         self.harmonic_tolerance = harmonic_tolerance
         self.frequency_resolution = frequency_resolution
         self.remove_local_snr = remove_local_snr
         self.remove_overlapping = remove_overlapping
-
-        self.freq_container = self.ini_freq_container()
 
         if self.remove_local_snr:
             ## Remove frequencies with amplitude less than the local SNR.
