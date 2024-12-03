@@ -6,7 +6,6 @@ import pandas as pd
 from scipy.optimize import curve_fit
 
 import lightkurve as lk
-from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import matplotlib
 from tqdm import tqdm
@@ -223,6 +222,7 @@ class PreWhitener:
             elif self.normalization == 'psd':
                 self.peak_powers.append(params[0])
             self.data_iter -= self.sinusoidal_model(self.t, *params)
+            # self.data_iter = np.nan_to_num(self.data_iter, nan=0.0, posinf=0.0, neginf=0.0)
             self.iteration += 1
         self.freq_container = self.init_freq_container()
 

@@ -72,20 +72,20 @@ class Periodogram:
         tmax = t.max()
         tmin = t.min()
         fmin, fmax = self.fbounds if self.fbounds is not None else (None, None)
-        df = 1.0 / (tmax - tmin)
+        dfreq = 1.0 / (tmax - tmin)
         
         if fmin is None:
-            fmin = df
+            fmin = dfreq
         if fmax is None:
             fmax = (0.5 / np.median(np.diff(t)))*self.nyq_mult
 
-        freqs = np.arange(fmin, fmax, df / self.oversample_factor)
-        
+        freqs = np.arange(fmin, fmax, dfreq / self.oversample_factor)
         model = LombScargle(t, data)
-        sc = model.power(freqs, method="fast", normalization="psd")
+        sc = model.power(freqs, method="fast", normalization='psd')
 
         if self.normalization == 'amplitude':
             amps = np.sqrt(4./len(t)) * np.sqrt(sc)
+            amps = np.nan_to_num(amps, nan=0.0, posinf=0.0, neginf=0.0)
             self.freqs = freqs
             self.amps = amps
         elif self.normalization == 'power':
