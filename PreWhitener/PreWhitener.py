@@ -298,7 +298,7 @@ class PreWhitener:
             Frequency resolution of the periodogram
         """
         if self.freq_container is None:
-            raise ValueError('No frequencies found. Try running auto()/interate() first')
+            raise ValueError('No frequencies found. Try running auto()/interate() first or decrease the SNR threshold')
         self.flag_harmonics = flag_harmonics
         self.harmonic_tolerance = harmonic_tolerance
         self.frequency_resolution = frequency_resolution
