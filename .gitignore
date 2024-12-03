@@ -4,5 +4,6 @@ stars/*
 **/.ipynb_checkpoints/*
 **/.DS_Store
 
-tests/*
-tests/test.ipynb
+tests/pw/*
+tests/*.csv
+tests/test_nb.ipynb
