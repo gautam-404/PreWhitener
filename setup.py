@@ -6,7 +6,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='PreWhitener',
-    version='1.0.0-beta',
+    version='1.0.1-beta',
     packages=find_packages(),
     install_requires=required,
     url='https://github.com/gautam-404/PreWhitener.git',
