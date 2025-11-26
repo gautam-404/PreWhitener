@@ -329,7 +329,7 @@ class PreWhitener:
         Parameters
         ----------
         ax : matplotlib.axes._axes.Axes  
-            The axes to plot on. If None, will use plt.gca()  
+            The axes to plot on. If None, will create a new figure and axes.
         save : bool  
             If True, save the plot  
         plot_kwargs : dict  
@@ -341,7 +341,8 @@ class PreWhitener:
         -------
         ax : matplotlib.axes._axes.Axes 
         """
-        ax = ax if ax is not None else plt.gca()
+        if ax is None:
+            fig, ax = plt.subplots()
         
         if isinstance(self.freq_container, pd.DataFrame):
             if self.normalization == 'amplitude':

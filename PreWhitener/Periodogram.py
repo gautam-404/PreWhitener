@@ -107,7 +107,7 @@ class Periodogram:
             If True, plot the identified peaks
         '''
         if ax is None:
-            ax = plt.gca()
+            fig, ax = plt.subplots()
 
         if mode == 'amplitude':
             ax.plot(self.freqs, self.amps, **kwargs) 
