@@ -1,3 +1,9 @@
 pw/*
 stars/*
-*/*
+**/__pycache__/
+**/.ipynb_checkpoints/*
+**/.DS_Store
+
+tests/pw/*
+tests/*.csv
+tests/test_nb.ipynb

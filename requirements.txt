@@ -1,0 +1,8 @@
+numpy
+pandas 
+astropy
+scipy
+matplotlib
+tqdm
+lightkurve
+pdoc
