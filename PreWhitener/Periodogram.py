@@ -1,36 +1,38 @@
+import os
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib
 from astropy.timeseries import LombScargle
 
 class Periodogram:
-    '''
-    Periodogram object for storing and operating on Lomb-Scargle periodograms
-    '''
+    """
+    Periodogram object for storing and operating on Lomb-Scargle periodograms.
+    """
     t: np.ndarray
-    '''Time series'''
+    """Time series."""
     data: np.ndarray
-    '''Flux or magnitude time series'''
+    """Flux or magnitude time series."""
     freqs: np.ndarray
-    '''Frequency grid for the periodogram'''
+    """Frequency grid for the periodogram."""
     amps: np.ndarray
-    '''Amplitude spectrum of the time series. Only one of amps or powers will be populated based on the mode'''
+    """Amplitude spectrum of the time series. Only one of amps or powers is populated based on mode."""
     powers: np.ndarray
-    '''Power spectrum of the time series. Only one of amps or powers will be populated based on the mode'''
+    """Power spectrum of the time series. Only one of amps or powers is populated based on mode."""
     fbounds: tuple
-    '''(fmin, fmax) frequency bounds'''
+    """(fmin, fmax) frequency bounds."""
     nyq_mult: int
-    '''Multiple of the Nyquist frequency to use as the maximum frequency'''
+    """Multiple of the Nyquist frequency to use as the maximum frequency."""
     oversample_factor: int
-    '''Oversample factor for the frequency grid'''
+    """Oversample factor for the frequency grid."""
     normalization: str
     """'amplitude' or 'psd'"""
+    wdir: str
+    """Working directory root for outputs."""
 
-    def __init__(self, t: np.ndarray, data: np.ndarray, fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude'):
-        '''
-        Constructor for Periodogram object
-        '''
+    def __init__(self, t: np.ndarray, data: np.ndarray, fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5,
+                normalization: str = 'amplitude', wdir: str = '.'):
+        """
+        Construct a Periodogram object.
+        """
         self.freqs = None
         self.amps = None
         self.powers = None
@@ -40,12 +42,13 @@ class Periodogram:
         self.nyq_mult = nyq_mult
         self.oversample_factor = oversample_factor
         self.normalization = normalization
+        self.wdir = os.path.abspath(wdir)
         self.amplitude_power_spectrum(t, data)
         
 
     def amplitude_power_spectrum(self, t: np.ndarray, data: np.ndarray):
-        '''
-        Calculate the amplitude spectrum of the time series y(t)
+        """
+        Calculate the amplitude spectrum of the time series y(t).
         
         Parameters
         ----------
@@ -68,7 +71,7 @@ class Periodogram:
             Frequency grid (1 / day)
         amps : array_like
             Normalized power spectrum (dimensionless unscaled)
-        '''
+        """
         tmax = t.max()
         tmin = t.min()
         fmin, fmax = self.fbounds if self.fbounds is not None else (None, None)
@@ -94,8 +97,8 @@ class Periodogram:
             self.powers = powers
 
     def plot(self, ax: plt.axes = None, mode: str = 'amplitude', **kwargs):
-        '''
-        Plot the periodogram
+        """
+        Plot the periodogram.
         
         Parameters
         ----------
@@ -105,7 +108,7 @@ class Periodogram:
             'amplitude' or 'power'
         show_peaks : bool
             If True, plot the identified peaks
-        '''
+        """
         if ax is None:
             fig, ax = plt.subplots()
 

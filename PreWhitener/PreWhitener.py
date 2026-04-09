@@ -61,7 +61,7 @@ class PreWhitener:
     """Significant peak frequencies and amplitudes in a pandas.DataFrame."""
 
     def __init__(self, name: str = None, lc: (lk.LightCurve or pd.DataFrame or tuple)=None, max_iterations: int = 100, snr_threshold: float = 5, 
-                fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude'):
+                fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude', wdir: str = '.'):
         """
         Constructor for PreWhitener object.
 
@@ -83,8 +83,11 @@ class PreWhitener:
             Oversample factor for the frequency grid.
         normalization : str
             Mode of the periodogram ('amplitude' or 'psd').
+        wdir : str
+            Working directory to save results. Default is current directory.
         """
         self.name = name
+        self.wdir = os.path.abspath(wdir)
         if lc is None:
             if name is not None:
                 if not self.get_lightcurve():
@@ -114,7 +117,7 @@ class PreWhitener:
         self.oversample_factor = oversample_factor
         self.normalization = normalization if normalization in ['amplitude', 'psd'] else 'amplitude' # default to amplitude mode
 
-        self.pg = Periodogram(self.lc.time.value, self.lc.flux, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, normalization=normalization)
+        self.pg = Periodogram(self.lc.time.value, self.lc.flux, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, normalization=normalization, wdir=self.wdir)
         self.pg_iter = copy.deepcopy(self.pg)
         self.noise_level = np.median(self.pg.amps)*self.snr_threshold if self.normalization == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
 
@@ -125,11 +128,12 @@ class PreWhitener:
         self.peak_powers = []
         self.freq_container = None
 
-        if not os.path.exists(f'pw/{self.name}'):
-            os.makedirs(f'pw/{self.name}')
+        self.output_dir = os.path.join(self.wdir, 'pw', str(self.name))
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
         else:
-            shutil.rmtree(f'pw/{self.name}')
-            os.makedirs(f'pw/{self.name}')
+            shutil.rmtree(self.output_dir)
+            os.makedirs(self.output_dir)
 
     def get_lightcurve(self) -> bool:
         """
@@ -317,7 +321,7 @@ class PreWhitener:
             self.freq_container = self.harmonics_check(self.freq_container, harmonic_tolerance=self.harmonic_tolerance)
         
         if save:
-            self.freq_container.to_csv(f'pw/{self.name}/frequencies.csv', index=False)
+            self.freq_container.to_csv(os.path.join(self.output_dir, 'frequencies.csv'), index=False)
 
         if make_plot:
             self.post_pw_plot(save=save)
@@ -356,7 +360,7 @@ class PreWhitener:
             ax.set_xlabel("Frequency (1/day)")
             ax.set_xlim(self.fmin, self.fmax)
             if save:
-                plt.savefig(f'pw/{self.name}/prewhitening.png', dpi=300)
+                plt.savefig(os.path.join(self.output_dir, 'prewhitening.png'), dpi=300)
             return ax
         else:
             raise ValueError('No frequencies found. Try running post_pw() first')
