@@ -24,7 +24,7 @@ class Periodogram:
     oversample_factor: int
     """Oversample factor for the frequency grid."""
     normalization: str
-    """'amplitude' or 'psd'"""
+    """'amplitude' or 'psd'."""
     wdir: str
     """Working directory root for outputs."""
 
@@ -85,14 +85,16 @@ class Periodogram:
         freqs = np.arange(fmin, fmax, dfreq / self.oversample_factor)
         model = LombScargle(t, data)
         sc = model.power(freqs, method="fast", normalization='psd')
+        sc = np.nan_to_num(sc, nan=0.0, posinf=0.0, neginf=0.0)
 
         if self.normalization == 'amplitude':
-            amps = np.sqrt(4./len(t)) * np.sqrt(sc)
+            amps = np.sqrt(4./len(t)) * np.sqrt(np.clip(sc, 0.0, None))
             amps = np.nan_to_num(amps, nan=0.0, posinf=0.0, neginf=0.0)
             self.freqs = freqs
             self.amps = amps
-        elif self.normalization == 'power':
+        elif self.normalization in ['psd', 'power']:
             powers = np.sqrt(4./len(t))**2 * sc
+            powers = np.nan_to_num(powers, nan=0.0, posinf=0.0, neginf=0.0)
             self.freqs = freqs
             self.powers = powers
 

@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
 
-import lightkurve as lk
 import matplotlib.pyplot as plt
 import matplotlib
 from tqdm import tqdm
@@ -60,7 +59,7 @@ class PreWhitener:
     freq_container : pd.DataFrame
     """Significant peak frequencies and amplitudes in a pandas.DataFrame."""
 
-    def __init__(self, name: str = None, lc: (lk.LightCurve or pd.DataFrame or tuple)=None, max_iterations: int = 100, snr_threshold: float = 5, 
+    def __init__(self, name: str = None, lc: (lk.LightCurve or pd.DataFrame or tuple)=None, max_iterations: int = 100, snr_threshold: float = 5,
                 fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude', wdir: str = '.'):
         """
         Constructor for PreWhitener object.
@@ -107,17 +106,24 @@ class PreWhitener:
                 raise ValueError('lc must be lightkurve.LightCurve or pandas.DataFrame or tuple\n\
                                 Or provide lightkurve searchable ID as name (e.g. TIC, HD, KIC)')
         
-        self.fbounds = fbounds if fbounds is not None else (0, 72 if self.nyquist_frequency() < 200 else 90)
+        self.nyq_mult = nyq_mult
+        if fbounds is not None:
+            self.fbounds = fbounds
+        else:
+            nyquist_limit = self.nyquist_frequency() * self.nyq_mult
+            default_fmax = 72 if nyquist_limit < 200 else 90
+            self.fbounds = (0, min(default_fmax, nyquist_limit))
+        normalization_alias = {'power': 'psd'}
+        self.normalization = normalization_alias.get(normalization, normalization)
 
         self.data_iter = copy.deepcopy(self.data - np.median(self.data))
         self.max_iterations = max_iterations
         self.snr_threshold = snr_threshold
         self.fmin, self.fmax = self.fbounds if self.fbounds is not None else (self.fmin, self.fmax)
-        self.nyq_mult = nyq_mult
         self.oversample_factor = oversample_factor
-        self.normalization = normalization if normalization in ['amplitude', 'psd'] else 'amplitude' # default to amplitude mode
+        self.normalization = self.normalization if self.normalization in ['amplitude', 'psd'] else 'amplitude'
 
-        self.pg = Periodogram(self.lc.time.value, self.lc.flux, fbounds=fbounds, nyq_mult=nyq_mult, oversample_factor=oversample_factor, normalization=normalization, wdir=self.wdir)
+        self.pg = Periodogram(self.lc.time.value, self.lc.flux, fbounds=self.fbounds, nyq_mult=self.nyq_mult, oversample_factor=self.oversample_factor, normalization=self.normalization, wdir=self.wdir)
         self.pg_iter = copy.deepcopy(self.pg)
         self.noise_level = np.median(self.pg.amps)*self.snr_threshold if self.normalization == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
 
@@ -200,6 +206,11 @@ class PreWhitener:
             y_i = self.pg_iter.amps
         elif self.normalization == 'psd':
             y_i = self.pg_iter.powers
+        else:
+            raise ValueError(f'Unsupported normalization: {self.normalization}')
+
+        if y_i is None:
+            raise ValueError(f'No periodogram values available for normalization={self.normalization}')
 
         if self.iteration < self.max_iterations:
             y_max = np.max(y_i)
@@ -213,8 +224,12 @@ class PreWhitener:
         
             omega = 2 * np.pi * freq
             p0 = [y_max, omega, 0.5]
+            freq_step = np.median(np.diff(freqs_i))
+            omega_margin = 2 * np.pi * max(freq_step, 1e-8)
+            lower_bounds = [0.0, omega - omega_margin, -2*np.pi]
+            upper_bounds = [np.inf, omega + omega_margin, 2*np.pi]
 
-            params, pcov = curve_fit(self.sinusoidal_model, self.t, self.data_iter, p0=p0)
+            params, _ = curve_fit(self.sinusoidal_model, self.t, self.data_iter, p0=p0, bounds=(lower_bounds, upper_bounds))
             ## Negative amp corrections. Flip sign, add pi to phase
             if params[0] < 0:
                 params[0] *= -1
@@ -417,7 +432,7 @@ class PreWhitener:
         df : pandas.DataFrame  
         """
         if self.normalization == 'psd':
-            df.sort_values(by=['freq', 'pow'], ascending=False)
+            df = df.sort_values(by=['freq', 'pow'], ascending=False)
         else:
             df = df.sort_values(by=['freq', 'amp'], ascending=False)
         df = df.reset_index(drop=True)
@@ -453,7 +468,7 @@ class PreWhitener:
             DataFrame with columns 'freq' and 'amp' with frequencies below the local SNR threshold removed  
         """
         if self.normalization == 'psd':
-            df.sort_values(by=['freq', 'pow'], ascending=False)
+            df = df.sort_values(by=['freq', 'pow'], ascending=False)
         else:
             df = df.sort_values(by=['freq', 'amp'], ascending=False)
         df = df.reset_index(drop=True)
