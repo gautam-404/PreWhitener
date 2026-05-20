@@ -95,7 +95,7 @@ class PreWhitener:
             - 'quiet_band_median_snr': estimate noise from a quiet frequency band only, then median * snr_threshold.
               Requires `f_noise_min`in `noise_kwargs`. `f_noise_max` is optional.
             - 'local_window_median_snr': dynamic local threshold around each candidate peak using a frequency window.
-              Requires `window`. `exclude_width` is optional in `noise_kwargs`.
+              To be used when manually iterating, instead of using `auto()`. Requires `window`. `exclude_width` is optional in `noise_kwargs`.
         noise_kwargs : dict, optional
             Additional keyword arguments required by selected `noise_level_type`.
         wdir : str
