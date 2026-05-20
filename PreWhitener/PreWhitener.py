@@ -60,7 +60,8 @@ class PreWhitener:
     """Significant peak frequencies and amplitudes in a pandas.DataFrame."""
 
     def __init__(self, name: str = None, lc: (lk.LightCurve or pd.DataFrame or tuple)=None, max_iterations: int = 100, snr_threshold: float = 5,
-                fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude', wdir: str = '.'):
+                fbounds: tuple = None, nyq_mult: int = 1, oversample_factor: int = 5, normalization: str = 'amplitude', noise_level: float = None,
+                noise_level_type: str = 'median_snr', noise_kwargs: dict = None, wdir: str = '.'):
         """
         Constructor for PreWhitener object.
 
@@ -82,6 +83,21 @@ class PreWhitener:
             Oversample factor for the frequency grid.
         normalization : str
             Mode of the periodogram ('amplitude' or 'psd').
+        noise_level : float, optional
+            Explicit global stopping threshold. If provided, this value takes precedence over `noise_level_type`.
+        noise_level_type : str, optional, default: 'median_snr'
+            Noise estimator used when `noise_level` is not provided.
+            Supported values:
+            - 'median_snr': global threshold = median(spectrum) * snr_threshold.
+            - 'mad_snr': global threshold = median + snr_threshold * (1.4826 * MAD).
+            - 'lower_tail_median_snr': use only the lowest-amplitude `tail_frac` of bins, then median * snr_threshold.
+              Requires `tail_frac` in `noise_kwargs`.
+            - 'quiet_band_median_snr': estimate noise from a quiet frequency band only, then median * snr_threshold.
+              Requires `f_noise_min`in `noise_kwargs`. `f_noise_max` is optional.
+            - 'local_window_median_snr': dynamic local threshold around each candidate peak using a frequency window.
+              Requires `window`. `exclude_width` is optional in `noise_kwargs`.
+        noise_kwargs : dict, optional
+            Additional keyword arguments required by selected `noise_level_type`.
         wdir : str
             Working directory to save results. Default is current directory.
         """
@@ -119,13 +135,21 @@ class PreWhitener:
         self.data_iter = copy.deepcopy(self.data - np.median(self.data))
         self.max_iterations = max_iterations
         self.snr_threshold = snr_threshold
+        self.noise_level_type = noise_level_type
+        self.noise_kwargs = {} if noise_kwargs is None else noise_kwargs
         self.fmin, self.fmax = self.fbounds if self.fbounds is not None else (self.fmin, self.fmax)
         self.oversample_factor = oversample_factor
         self.normalization = self.normalization if self.normalization in ['amplitude', 'psd'] else 'amplitude'
 
         self.pg = Periodogram(self.lc.time.value, self.lc.flux, fbounds=self.fbounds, nyq_mult=self.nyq_mult, oversample_factor=self.oversample_factor, normalization=self.normalization, wdir=self.wdir)
         self.pg_iter = copy.deepcopy(self.pg)
-        self.noise_level = np.median(self.pg.amps)*self.snr_threshold if self.normalization == 'amplitude' else np.median(self.pg.powers)*self.snr_threshold
+        self.noise_level_override = noise_level is not None
+        if self.noise_level_override:
+            self.noise_level = noise_level
+        else:
+            freqs_0, y_0 = self.get_spectrum_xy(self.pg)
+            self.noise_level = self.compute_noise_level(freqs_0, y_0, noise_level_type=self.noise_level_type,
+                                                        snr_threshold=self.snr_threshold, noise_kwargs=self.noise_kwargs)
 
         self.iteration = 0
         self.stop_iteration = False
@@ -187,6 +211,78 @@ class PreWhitener:
         """
         return 1/(2*np.median(np.diff(self.t)))
 
+    ## helper
+    def get_spectrum_xy(self, pg_obj: Periodogram) -> tuple:
+        if self.normalization == 'amplitude':
+            return pg_obj.freqs, pg_obj.amps
+        if self.normalization == 'psd':
+            return pg_obj.freqs, pg_obj.powers
+        raise ValueError(f'Unsupported normalization: {self.normalization}')
+
+    ## helper
+    def validate_xy(self, freqs: np.ndarray, y: np.ndarray) -> tuple:
+        freqs_arr = np.asarray(freqs, dtype=float)
+        y_arr = np.asarray(y, dtype=float)
+        finite_mask = np.isfinite(freqs_arr) & np.isfinite(y_arr)
+        freqs_valid = freqs_arr[finite_mask]
+        y_valid = y_arr[finite_mask]
+        if len(y_valid) == 0:
+            raise ValueError('No finite periodogram values available for noise level estimation.')
+        return freqs_valid, y_valid
+
+    ## helper
+    def compute_noise_level(self, freqs: np.ndarray, y: np.ndarray, noise_level_type: str, snr_threshold: float, noise_kwargs: dict) -> float:
+        freqs_valid, y_valid = self.validate_xy(freqs, y)
+        if noise_level_type == 'median_snr':
+            return np.median(y_valid) * snr_threshold
+        if noise_level_type == 'mad_snr': ## median absolute deviation
+            y_med = np.median(y_valid)
+            mad = np.median(np.abs(y_valid - y_med))
+            sigma = 1.4826 * mad            ### For a normal distribution, MAD ≈ 0.67449 * sigma. So sigma is MAD / 0.67449 ≈ 1.4826 * MAD.
+            return y_med + snr_threshold * sigma
+        if noise_level_type == 'lower_tail_median_snr':
+            tail_frac = noise_kwargs.get('tail_frac', None)
+            if tail_frac is None:
+                raise ValueError("noise_level_type='lower_tail_median_snr' requires noise_kwargs['tail_frac'].")
+            if not (0 < float(tail_frac) <= 1):
+                raise ValueError("noise_kwargs['tail_frac'] must be in the range (0, 1].")
+            n_tail = max(1, int(np.floor(len(y_valid) * float(tail_frac))))
+            y_tail = np.partition(y_valid, n_tail - 1)[:n_tail]
+            return np.median(y_tail) * snr_threshold
+        if noise_level_type == 'quiet_band_median_snr':
+            f_noise_min = noise_kwargs.get('f_noise_min', None)
+            if f_noise_min is None:
+                raise ValueError("noise_level_type='quiet_band_median_snr' requires noise_kwargs['f_noise_min'].")
+            f_noise_max = noise_kwargs.get('f_noise_max', self.fmax)
+            band_mask = (freqs_valid >= float(f_noise_min)) & (freqs_valid <= float(f_noise_max))
+            if np.sum(band_mask) < 3:
+                raise ValueError('Quiet-band mask has fewer than 3 samples; adjust f_noise_min/f_noise_max.')
+            return np.median(y_valid[band_mask]) * snr_threshold
+        if noise_level_type == 'local_window_median_snr':
+            raise ValueError("noise_level_type='local_window_median_snr' must be evaluated with compute_local_noise_level.")
+        raise ValueError(f"Unsupported noise_level_type: {noise_level_type}")
+
+    ## helper
+    def compute_local_noise_level(self, freqs: np.ndarray, y: np.ndarray, freq_peak: float, noise_level_type: str, snr_threshold: float, noise_kwargs: dict) -> float:
+        if noise_level_type != 'local_window_median_snr':
+            return self.compute_noise_level(freqs, y, noise_level_type=noise_level_type, snr_threshold=snr_threshold, noise_kwargs=noise_kwargs)
+        window = noise_kwargs.get('window', None)
+        if window is None:
+            raise ValueError("noise_level_type='local_window_median_snr' requires noise_kwargs['window'].")
+        window = float(window)
+        if window <= 0:
+            raise ValueError("noise_kwargs['window'] must be > 0.")
+        exclude_width = float(noise_kwargs.get('exclude_width', 0.0))
+        if exclude_width < 0:
+            raise ValueError("noise_kwargs['exclude_width'] must be >= 0.")
+        freqs_valid, y_valid = self.validate_xy(freqs, y)
+        local_mask = np.abs(freqs_valid - float(freq_peak)) <= window
+        if exclude_width > 0:
+            local_mask &= np.abs(freqs_valid - float(freq_peak)) >= exclude_width
+        if np.sum(local_mask) < 3:
+            raise ValueError('Local-window mask has fewer than 3 samples; adjust window/exclude_width.')
+        return np.median(y_valid[local_mask]) * snr_threshold
+
 
     # def noise_level(self) -> float:
     #     """
@@ -217,7 +313,15 @@ class PreWhitener:
             freq = freqs_i[np.argmax(y_i)]
 
             ### SNR stopping condition ###
-            if y_max < self.noise_level:
+            if self.noise_level_override:
+                noise_level_i = self.noise_level
+            elif self.noise_level_type == 'local_window_median_snr':
+                noise_level_i = self.compute_local_noise_level(freqs_i, y_i, freq_peak=freq, noise_level_type=self.noise_level_type,
+                                                                snr_threshold=self.snr_threshold, noise_kwargs=self.noise_kwargs)
+            else:
+                noise_level_i = self.compute_noise_level(freqs_i, y_i, noise_level_type=self.noise_level_type,
+                                                          snr_threshold=self.snr_threshold, noise_kwargs=self.noise_kwargs)
+            if y_max < noise_level_i:
                 print('SNR threshold reached')
                 self.stop_iteration = True
                 return
