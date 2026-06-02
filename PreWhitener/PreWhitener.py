@@ -157,6 +157,11 @@ class PreWhitener:
         self.peak_amps = []
         self.peak_powers = []
         self.peak_phases = []
+        # Frequency windows (f_lo, f_hi) whose highest periodogram peak had no
+        # coherent sinusoid under it (fit below the noise threshold). They are
+        # excluded from future peak selection so the run can continue past
+        # incoherent leakage/alias features instead of aborting (see iterate()).
+        self.rejected_windows = []
         self.freq_container = None
         # Populated by _attach_uncertainties() in post_pw().
         self.noise_sigma_residual = None
@@ -325,8 +330,17 @@ class PreWhitener:
             raise ValueError(f'No periodogram values available for normalization={self.normalization}')
 
         if self.iteration < self.max_iterations:
-            y_max = np.max(y_i)
-            freq = freqs_i[np.argmax(y_i)]
+            # Exclude previously rejected (incoherent) frequency regions from
+            # peak selection so we don't repeatedly re-pick the same leakage
+            # bump. The noise level itself is still estimated over the full
+            # spectrum below.
+            y_sel = np.asarray(y_i, dtype=float)
+            if self.rejected_windows:
+                y_sel = y_sel.copy()
+                for lo, hi in self.rejected_windows:
+                    y_sel[(freqs_i >= lo) & (freqs_i <= hi)] = 0.0
+            y_max = np.max(y_sel)
+            freq = freqs_i[int(np.argmax(y_sel))]
 
             ### SNR stopping condition ###
             if self.noise_level_override:
@@ -343,17 +357,31 @@ class PreWhitener:
                 return
         
             omega = 2 * np.pi * freq
-            p0 = [y_max, omega, 0.5]
-            freq_step = np.median(np.diff(freqs_i))
-            omega_margin = 2 * np.pi * max(freq_step, 1e-8)
-            lower_bounds = [0.0, omega - omega_margin, -2*np.pi]
-            upper_bounds = [np.inf, omega + omega_margin, 2*np.pi]
 
             # Fit on time shifted to the mean epoch so the fitted phase is
             # decorrelated from frequency (Montgomery & O'Donoghue 1999,
             # ADS 1999DSSN...13...28M). The same shifted time must be used when
             # subtracting the fitted sinusoid from data_iter.
             t_shifted = self.t - self.t_ref
+
+            # Seed the phase from a linear projection of the residual onto
+            # sin/cos at the periodogram frequency, rather than a fixed guess.
+            # Since A*sin(wt + phi) = A*cos(phi)*sin(wt) + A*sin(phi)*cos(wt),
+            # the projection gives phi = atan2(<r,cos>, <r,sin>) in closed form.
+            # A constant phase guess can be near-orthogonal to a real peak; in
+            # that case curve_fit drives the amplitude to ~0 (the phase/omega
+            # Jacobian vanishes as A -> 0), so a genuine high-S/N peak is fit as
+            # noise and the post-fit SNR gate aborts the whole run.
+            resid = np.nan_to_num(np.asarray(self.data_iter, dtype=float))
+            proj_sin = np.dot(resid, np.sin(omega * t_shifted))
+            proj_cos = np.dot(resid, np.cos(omega * t_shifted))
+            phase_guess = np.arctan2(proj_cos, proj_sin)
+            p0 = [y_max, omega, phase_guess]
+            freq_step = np.median(np.diff(freqs_i))
+            omega_margin = 2 * np.pi * max(freq_step, 1e-8)
+            lower_bounds = [0.0, omega - omega_margin, -2*np.pi]
+            upper_bounds = [np.inf, omega + omega_margin, 2*np.pi]
+
             params, _ = curve_fit(self.sinusoidal_model, t_shifted, self.data_iter, p0=p0, bounds=(lower_bounds, upper_bounds))
             ## Negative amp corrections. Flip sign, add pi to phase
             if params[0] < 0:
@@ -363,16 +391,20 @@ class PreWhitener:
             phase = (params[2] + np.pi) % (2 * np.pi) - np.pi
 
             # Post-fit SNR gate. The pre-fit check uses the periodogram peak
-            # height y_max, which can include window-function leakage or
-            # numerical residue from imperfectly subtracted peaks. If
-            # curve_fit actually converged well below the noise threshold,
-            # the apparent periodogram peak was not a coherent sinusoid;
-            # stop iterating so we don't accumulate degenerate near-zero-
-            # amplitude fits at the same frequency.
+            # height y_max, which can include window-function leakage, aliased
+            # out-of-band power, or numerical residue from imperfectly
+            # subtracted peaks. If curve_fit converged well below the noise
+            # threshold, the apparent periodogram peak was not a coherent
+            # sinusoid. Rather than terminating the whole run (which would
+            # silently drop every genuine peak still left elsewhere in the
+            # spectrum), exclude this frequency region from future selection
+            # and continue. The pre-fit (y_max < threshold) check, evaluated
+            # over the non-excluded bins, remains the real stopping criterion.
             fitted_val = params[0] if self.normalization == 'amplitude' else params[0]**2
             if fitted_val < noise_level_i:
-                print('Fitted amplitude below SNR threshold; stopping.')
-                self.stop_iteration = True
+                reject_hw = max(freq_step, 1.0 / (self.t.max() - self.t.min()))
+                self.rejected_windows.append((freq - reject_hw, freq + reject_hw))
+                self.freq_container = self.init_freq_container()
                 return
 
             self.peak_freqs.append(params[1]/(2*np.pi))
